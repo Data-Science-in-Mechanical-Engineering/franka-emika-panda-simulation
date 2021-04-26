@@ -1,7 +1,7 @@
 # PandaRobot
-URDF and meshes for the Franka Emika Panda robot
-XML file generated from the URDF and meshes
-Torque and position controls implemented in the XML file
+
+XML file generated from the URDF and meshes (link: https://github.com/StanfordASL/PandaRobot.jl)
+Torque and position controls implemented in the XML file (limits taken from: https://frankaemika.github.io/docs/control_parameters.html#constants)
 Can be used with mujoco simulator
 
 To run a mujoco license is necessary.
