@@ -25,7 +25,7 @@ class PandaEnv(gym.GoalEnv):
 
     def __init__(self,n_substeps=4,initial_qpos=INITIAL_q,n_actions=7):
 
-        model=mujoco_py.load_model_from_path("Panda_xml/model_actuate.xml")
+        model=mujoco_py.load_model_from_path("Panda_xml/model_torque.xml")
         self.sim=mujoco_py.MjSim(model,nsubsteps=n_substeps)
         self.viewer=None
         self._viewers={}
