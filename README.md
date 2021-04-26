@@ -13,5 +13,5 @@ Follow the following commands for running the simulation:
 
 1. Enter the mujoco path: ``` ~/mujoco/mujoco200/bin```
 ```
-./simulate /path/to/PandaRobot/deps/Panda_xml/model_actuate.xml
+./simulate /path/to/franka-emika-panda-simulation/Panda_xml/model_actuate.xml
 ```
