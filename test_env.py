@@ -17,9 +17,14 @@ env=PandaEnv()
 obs=env.reset()
 joints=9
 _MNN_vector = np.zeros(joints ** 2)
-Kp=np.eye(3)*200 #Check out impedance controller: [100,800,1000]
+Kp=np.eye(3)*400 #Check out impedance controller: [100,800,1000] , inverse dynamics controller [200 500 1000]
+Kp[0,0]=Kp[0,0]
+Kp[1,1]=Kp[1,1]
+Kp[2,2]=Kp[2,2]*2
+#Kp[2,2]=Kp[2,2]*1.5
+
 Kd=np.sqrt(Kp)*2
-controller_class=["impedance","gravity_compensation", "inverse_dynamics"]
+controller_class=["impedance","gravity_compensation", "inverse_dynamics_task_space","inverse_dynamics_joint_space"]
 controller = controller_class[2]
 #Kp=1
 for i in range(2000):
@@ -43,12 +48,20 @@ for i in range(2000):
     elif controller==controller_class[2]: #Inverse dynamics control
         u += np.dot(J.T,np.dot(Mx,wM_des))
 
+    #elif controller==controller_class[3]:
+    #    qdes=np.dot(np.linalg.inv((np.dot(J.T,J)+0.05*np.eye(9))),np.dot(J.T,obs["desired_goal"]))
+    #    ddq=1e6*(qdes-env.sim.data.qpos)-np.sqrt(1e6)*2*env.sim.data.qvel
+    #    u+=np.dot(M,ddq)
+
 
 
     #u+=-10*env.sim.data.qvel
     torque=u
     torque=np.clip(torque,env.action_space.low,env.action_space.high)
     obs,reward,done,info=env.step(torque)
+    #if info["is_success"]:
+    #    print("reached target")
+    #    env.reset()
     env.render()
     u_prev=u
 

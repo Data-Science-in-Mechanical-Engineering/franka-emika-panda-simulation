@@ -29,7 +29,7 @@ class PandaEnv(gym.GoalEnv):
         self.sim=mujoco_py.MjSim(self.model,nsubsteps=n_substeps)
         self.viewer=None
         self._viewers={}
-        self.target_range = 0.05
+        self.target_range = 0.5
         #self.metadata = {
         #    'render.modes': ['human', 'rgb_array'],
         #    'video.frames_per_second': int(np.round(1.0 / self.dt))
@@ -172,8 +172,8 @@ class PandaEnv(gym.GoalEnv):
         self.sim.forward()
 
     def _is_success(self, achieved_goal, desired_goal):
-
-        return False
+        dist=np.linalg.norm(achieved_goal-desired_goal,2)
+        return  dist<=1e-2
 
     def _set_action(self,action):
         assert action.shape == (self.n_actions,)
@@ -199,11 +199,12 @@ class PandaEnv(gym.GoalEnv):
 
     def _sample_goal(self):
         scale=np.eye(3)
-        scale[0,0]=2.5
-        scale[1,1]=2.5
-        scale[2, 2] = 0.85
-        goal = np.dot(scale,self.initial_gripper_xpos[:3]) + self.np_random.uniform(-self.target_range, self.target_range, size=3)
-
+        scale[0,0]=3.5
+        scale[1,1]=3.5
+        scale[2, 2] = 0.35
+        goal = np.dot(scale,self.initial_gripper_xpos[:3])
+        goal[0]=goal[0]+ self.np_random.uniform(-self.target_range, self.target_range, size=1)
+        goal[1] = goal[1] + self.np_random.uniform(-self.target_range, self.target_range, size=1)
         return goal.copy()
 
     def _render_callback(self):
