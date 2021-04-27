@@ -29,12 +29,12 @@ class PandaEnv(gym.GoalEnv):
         self.sim=mujoco_py.MjSim(self.model,nsubsteps=n_substeps)
         self.viewer=None
         self._viewers={}
-        self.target_range = 0.75
+        self.target_range = 0.5
         #self.metadata = {
         #    'render.modes': ['human', 'rgb_array'],
         #    'video.frames_per_second': int(np.round(1.0 / self.dt))
         #}
-        self.gripper_extra_height = 2
+        self.gripper_extra_height = 0.1
         self.seed()
         self._env_setup(initial_qpos=initial_qpos)
         self.initial_state=copy.deepcopy(self.sim.get_state())
@@ -200,7 +200,7 @@ class PandaEnv(gym.GoalEnv):
     def _sample_goal(self):
 
         goal = self.initial_gripper_xpos[:3] + self.np_random.uniform(-self.target_range, self.target_range, size=3)
-
+        goal[2]=goal[2]+0.15
         return goal.copy()
 
     def _render_callback(self):
