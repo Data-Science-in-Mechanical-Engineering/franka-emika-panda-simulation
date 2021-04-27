@@ -1,0 +1,65 @@
+<mujoco model="panda">
+    <compiler angle="radian" />
+    <size njmax="500" nconmax="100" />
+    <asset>
+        <mesh name="link0" file="link0.stl" />
+        <mesh name="link1" file="link1.stl" />
+        <mesh name="link2" file="link2.stl" />
+        <mesh name="link3" file="link3.stl" />
+        <mesh name="link4" file="link4.stl" />
+        <mesh name="link5" file="link5.stl" />
+        <mesh name="link6" file="link6.stl" />
+        <mesh name="link7" file="link7.stl" />
+        <mesh name="hand" file="hand.stl" />
+        <mesh name="finger" file="finger.stl" />
+    </asset>
+    <worldbody>
+        <geom type="mesh" rgba="1 1 1 1" mesh="link0" />
+        <body name="panda_link1" pos="0 0 0.333">
+            <inertial pos="2.23331e-06 -0.0324794 -0.0675759" quat="0.981685 0.190514 3.25128e-05 -0.000197731" mass="2.48106" diaginertia="0.016331 0.0161114 0.00391197" />
+            <joint name="panda_joint1" pos="0 0 0" axis="0 0 1" limited="true" range="-2.9671 2.9671" />
+            <geom type="mesh" rgba="1 1 1 1" mesh="link1" />
+            <body name="panda_link2" pos="0 0 0" quat="0.707107 -0.707107 0 0">
+                <inertial pos="3.06832e-06 -0.0686027 0.0322097" quat="0.560723 0.828003 -0.000161471 0.000122581" mass="2.50118" diaginertia="0.0166848 0.0164617 0.00394577" />
+                <joint name="panda_joint2" pos="0 0 0" axis="0 0 1" limited="true" range="-1.8326 1.8326" />
+                <geom type="mesh" rgba="1 1 1 1" mesh="link2" />
+                <body name="panda_link3" pos="0 -0.316 0" quat="0.707107 0.707107 0 0">
+                    <inertial pos="0.0472246 0.0315806 -0.0322521" quat="-0.0149067 0.367857 0.23901 0.898517" mass="1.81633" diaginertia="0.00870932 0.00864748 0.00248118" />
+                    <joint name="panda_joint3" pos="0 0 0" axis="0 0 1" limited="true" range="-2.9671 2.9671" />
+                    <geom type="mesh" rgba="1 1 1 1" mesh="link3" />
+                    <body name="panda_link4" pos="0.0825 0 0" quat="0.707107 0.707107 0 0">
+                        <inertial pos="-0.0359194 0.0334788 0.0311571" quat="0.822819 0.449368 0.282998 0.20236" mass="1.85242" diaginertia="0.00905326 0.00899766 0.00255325" />
+                        <joint name="panda_joint4" pos="0 0 0" axis="0 0 1" limited="true" range="-3.1416 0" />
+                        <geom type="mesh" rgba="1 1 1 1" mesh="link4" />
+                        <body name="panda_link5" pos="-0.0825 0.384 0" quat="0.707107 -0.707107 0 0">
+                            <inertial pos="-4.66644e-05 0.052777 -0.09842" quat="0.989511 -0.144436 0.000348994 0.00243299" mass="2.62952" diaginertia="0.0276164 0.0267043 0.00350504" />
+                            <joint name="panda_joint5" pos="0 0 0" axis="0 0 1" limited="true" range="-2.9671 2.9671" />
+                            <geom type="mesh" rgba="1 1 1 1" mesh="link5" />
+                            <body name="panda_link6" pos="0 0 0" quat="0.707107 0.707107 0 0">
+                                <inertial pos="0.0522581 0.0068803 0.00853438" quat="-0.0530638 0.775191 0.053589 0.627209" mass="1.21176" diaginertia="0.00378782 0.00292139 0.00179178" />
+                                <joint name="panda_joint6" pos="0 0 0" axis="0 0 1" limited="true" range="-0.0873 3.8223" />
+                                <geom type="mesh" rgba="1 1 1 1" mesh="link6" />
+                                <body name="panda_link7" pos="0.088 0 0" quat="0.707107 0.707107 0 0">
+                                    <inertial pos="0.00350743 0.00354792 0.111051" quat="0.257259 0.28351 0.683294 0.62173" mass="0.890282" diaginertia="0.00295678 0.00226587 0.00112525" />
+                                    <joint name="panda_joint7" pos="0 0 0" axis="0 0 1" limited="true" range="-2.9671 2.9671" />
+                                    <geom type="mesh" rgba="1 1 1 1" mesh="link7" />
+                                    <geom pos="0 0 0.107" quat="0.92388 0 0 -0.382683" type="mesh" rgba="1 1 1 1" mesh="hand" />
+                                    <body name="panda_leftfinger" pos="0 0 0.1654" quat="0.92388 0 0 -0.382683">
+                                        <inertial pos="-1.8291e-06 0.0123159 0.0245396" quat="0.70113 0.0854958 -0.0855768 0.702698" mass="0.0166274" diaginertia="4.87247e-06 4.85977e-06 8.12278e-07" />
+                                        <joint name="panda_finger_joint1" pos="0 0 0" axis="0 1 0" type="slide" limited="true" range="0 0.04" />
+                                        <geom type="mesh" rgba="1 1 1 1" mesh="finger" />
+                                    </body>
+                                    <body name="panda_rightfinger" pos="0 0 0.1654" quat="0.92388 0 0 -0.382683">
+                                        <inertial pos="1.8291e-06 -0.0123159 0.0245396" quat="-0.702698 0.0855768 0.0854958 0.70113" mass="0.0166274" diaginertia="4.87247e-06 4.85977e-06 8.12278e-07" />
+                                        <joint name="panda_finger_joint2" pos="0 0 0" axis="0 -1 0" type="slide" limited="true" range="0 0.04" />
+                                        <geom quat="0 0 0 1" type="mesh" rgba="1 1 1 1" mesh="finger" />
+                                    </body>
+                                </body>
+                            </body>
+                        </body>
+                    </body>
+                </body>
+            </body>
+        </body>
+    </worldbody>
+</mujoco>

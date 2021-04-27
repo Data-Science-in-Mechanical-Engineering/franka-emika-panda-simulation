@@ -17,5 +17,7 @@ Follow the following commands for running the simulation:
 ```
 
 Furthermore, a simple gym environment has also been implemented where the action space consists of the joint torques.
+
+Installation: ```pip install -e .```
 ``` test_env.py ``` can be run to visualize a simple gravity compensation controller.
 

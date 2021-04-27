@@ -1,6 +1,6 @@
 import numpy as np
 import gym
-from panda_env import PandaEnv
+import Panda_Env #Library defined for the panda environment
 import mujoco_py
 
 
@@ -13,7 +13,7 @@ def _Mx(M,J,threshold=1e-3):
     return Mx,Mx_inv
 
 
-env=PandaEnv()
+env=gym.make("PandaEnv-v0")
 obs=env.reset()
 joints=9
 _MNN_vector = np.zeros(joints ** 2)
