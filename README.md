@@ -15,3 +15,7 @@ Follow the following commands for running the simulation:
 ```
 ./simulate /path/to/franka-emika-panda-simulation/Panda_xml/model_actuate.xml
 ```
+
+Furthermore, a simple gym environment has also been implemented where the action space consists of the joint torques.
+``` test_env.py ``` can be run to visualize a simple gravity compensation controller.
+

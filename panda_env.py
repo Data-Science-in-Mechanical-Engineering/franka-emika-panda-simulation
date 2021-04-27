@@ -23,18 +23,18 @@ class PandaEnv(gym.GoalEnv):
         Buffers will be swapped only once per step.
     """
 
-    def __init__(self,n_substeps=4,initial_qpos=INITIAL_q,n_actions=7):
+    def __init__(self,n_substeps=4,initial_qpos=INITIAL_q,n_actions=9):
 
-        model=mujoco_py.load_model_from_path("Panda_xml/model_torque.xml")
-        self.sim=mujoco_py.MjSim(model,nsubsteps=n_substeps)
+        self.model=mujoco_py.load_model_from_path("Panda_xml/model_torque.xml")
+        self.sim=mujoco_py.MjSim(self.model,nsubsteps=n_substeps)
         self.viewer=None
         self._viewers={}
-        self.target_range = 5
+        self.target_range = 0.75
         #self.metadata = {
         #    'render.modes': ['human', 'rgb_array'],
         #    'video.frames_per_second': int(np.round(1.0 / self.dt))
         #}
-
+        self.gripper_extra_height = 2
         self.seed()
         self._env_setup(initial_qpos=initial_qpos)
         self.initial_state=copy.deepcopy(self.sim.get_state())
@@ -43,9 +43,10 @@ class PandaEnv(gym.GoalEnv):
         obs=self._get_obs()
 
         self.torque_ranges=np.ones(n_actions)*87
-        self.torque_ranges[4:]=12
+        self.torque_ranges[4:7]=12
+        self.torque_ranges[7:9]=70
         self.action_space=spaces.Box(-self.torque_ranges,self.torque_ranges,dtype='float32')
-
+        self.n_actions=n_actions
         self.observation_space = spaces.Dict(dict(
             desired_goal=spaces.Box(-np.inf, np.inf, shape=obs['achieved_goal'].shape, dtype='float32'),
             achieved_goal=spaces.Box(-np.inf, np.inf, shape=obs['achieved_goal'].shape, dtype='float32'),
@@ -126,15 +127,26 @@ class PandaEnv(gym.GoalEnv):
         utils.reset_mocap_welds(self.sim)
         self.sim.forward()
 
-        self.initial_gripper_xpos = self.sim.data.get_body_xpos('panda_rightfinger').copy()
+        gripper_target = np.array([-0.498, 0.005, -0.431 + self.gripper_extra_height]) + self.sim.data.get_site_xpos(
+            'panda:grip')
+        gripper_rotation = np.array([1., 0., 1., 0.])
+        self.sim.data.set_mocap_pos('panda:mocap', gripper_target)
+        self.sim.data.set_mocap_quat('panda:mocap', gripper_rotation)
+        for _ in range(10):
+            self.sim.step()
+
+        self.initial_gripper_xpos = self.sim.data.get_site_xpos('panda:grip').copy()
 
     def _get_obs(self):
         # positions
-        grip_pos = self.sim.data.get_body_xpos('panda_rightfinger')
+        #grip_pos = self.sim.data.get_body_xpos('panda_rightfinger')
+        #dt = self.sim.nsubsteps * self.sim.model.opt.timestep
+        #grip_velp = self.sim.data.get_body_xvelp('panda_rightfinger') * dt
+        #robot_qpos, robot_qvel = utils.robot_get_obs(self.sim)
+        grip_pos = self.sim.data.get_site_xpos('panda:grip')
         dt = self.sim.nsubsteps * self.sim.model.opt.timestep
-        grip_velp = self.sim.data.get_body_xvelp('panda_rightfinger') * dt
+        grip_velp = self.sim.data.get_site_xvelp('panda:grip') * dt
         robot_qpos, robot_qvel = utils.robot_get_obs(self.sim)
-
         object_pos = object_rot = object_velp = object_velr = object_rel_pos = np.zeros(0)
         gripper_state = robot_qpos[-2:]
         gripper_vel = robot_qvel[-2:] * dt  # change to a scalar if the gripper is made symmetric
@@ -164,11 +176,12 @@ class PandaEnv(gym.GoalEnv):
         return False
 
     def _set_action(self,action):
-        assert action.shape == (7,)
+        assert action.shape == (self.n_actions,)
 
-
-        utils.ctrl_set_action(self.sim, action)
-        utils.mocap_set_action(self.sim, action)
+        for i in range(self.n_actions):
+            self.sim.data.ctrl[i] = action[i]
+        #utils.ctrl_set_action(self.sim, action)
+        #utils.mocap_set_action(self.sim, action)
 
     def _viewer_setup(self):
         body_id = self.sim.model.body_name2id('panda_link7')
@@ -187,13 +200,14 @@ class PandaEnv(gym.GoalEnv):
     def _sample_goal(self):
 
         goal = self.initial_gripper_xpos[:3] + self.np_random.uniform(-self.target_range, self.target_range, size=3)
+
         return goal.copy()
 
     def _render_callback(self):
         # Visualize target.
-        #sites_offset = (self.sim.data.site_xpos - self.sim.model.site_pos).copy()
-        #site_id = self.sim.model.site_name2id('target0')
-        #self.sim.model.site_pos[site_id] = self.goal - sites_offset[0]
+        sites_offset = (self.sim.data.site_xpos - self.sim.model.site_pos).copy()
+        site_id = self.sim.model.site_name2id('target0')
+        self.sim.model.site_pos[site_id] = self.goal-sites_offset[site_id]
         self.sim.forward()
 
     def compute_reward(self, achieved_goal, goal, info):
