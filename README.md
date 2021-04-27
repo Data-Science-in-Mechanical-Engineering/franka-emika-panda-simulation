@@ -13,11 +13,13 @@ Follow the following commands for running the simulation:
 
 1. Enter the mujoco path: ``` ~/mujoco/mujoco200/bin```
 ```
-./simulate /path/to/franka-emika-panda-simulation/Panda_xml/model_actuate.xml
+./simulate /path/to/franka-emika-panda-simulation/Panda_Env/envs/assets/Panda_xml/model_actuate.xml
 ```
 
 Furthermore, a simple gym environment has also been implemented where the action space consists of the joint torques.
 
 Installation: ```pip install -e .```
+
+Testing:
 ``` test_env.py ``` can be run to visualize a simple gravity compensation controller.
 
