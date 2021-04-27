@@ -23,18 +23,18 @@ class PandaEnv(gym.GoalEnv):
         Buffers will be swapped only once per step.
     """
 
-    def __init__(self,n_substeps=4,initial_qpos=INITIAL_q,n_actions=9):
+    def __init__(self,n_substeps=1,initial_qpos=INITIAL_q,n_actions=9):
 
         self.model=mujoco_py.load_model_from_path("Panda_xml/model_torque.xml")
         self.sim=mujoco_py.MjSim(self.model,nsubsteps=n_substeps)
         self.viewer=None
         self._viewers={}
-        self.target_range = 0.5
+        self.target_range = 0.05
         #self.metadata = {
         #    'render.modes': ['human', 'rgb_array'],
         #    'video.frames_per_second': int(np.round(1.0 / self.dt))
         #}
-        self.gripper_extra_height = 0.1
+        self.gripper_extra_height = 0.06
         self.seed()
         self._env_setup(initial_qpos=initial_qpos)
         self.initial_state=copy.deepcopy(self.sim.get_state())
@@ -198,9 +198,12 @@ class PandaEnv(gym.GoalEnv):
         return True
 
     def _sample_goal(self):
+        scale=np.eye(3)
+        scale[0,0]=2.5
+        scale[1,1]=2.5
+        scale[2, 2] = 0.85
+        goal = np.dot(scale,self.initial_gripper_xpos[:3]) + self.np_random.uniform(-self.target_range, self.target_range, size=3)
 
-        goal = self.initial_gripper_xpos[:3] + self.np_random.uniform(-self.target_range, self.target_range, size=3)
-        goal[2]=goal[2]+0.15
         return goal.copy()
 
     def _render_callback(self):

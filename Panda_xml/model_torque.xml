@@ -57,8 +57,9 @@
                                         <inertial pos="1.8291e-06 -0.0123159 0.0245396" quat="-0.702698 0.0855768 0.0854958 0.70113" mass="0.0166274" diaginertia="4.87247e-06 4.85977e-06 8.12278e-07" />
                                         <joint name="panda_finger_joint2" damping="100" pos="0 0 0" axis="0 -1 0" type="slide" limited="true" range="0 0.04" armature='5'/>
                                         <geom quat="0 0 0 1" type="mesh" rgba="1 1 1 1" mesh="finger" />
+                                        <site name="panda:grip" pos="0.02 0 0" rgba="0 0 0 0" size="0.02 0.02 0.02"></site>
                                     </body>
-                                    <site name="panda:grip" pos="0.02 0 0" rgba="0 0 0 0" size="0.02 0.02 0.02"></site>
+                                    
                                 </body>
                             </body>
                         </body>
