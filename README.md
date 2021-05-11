@@ -5,7 +5,7 @@ XML file generated from the URDF and meshes (link: https://github.com/StanfordAS
 Torque and position controls implemented in the XML file (limits taken from: https://frankaemika.github.io/docs/control_parameters.html#constants)
 
 
-Can be used with mujoco simulator
+Can be used with mujoco simulator (recommended version: 2.0.2.8 )
 
 To run a mujoco license is necessary.
 
