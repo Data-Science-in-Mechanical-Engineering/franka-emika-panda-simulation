@@ -3,8 +3,8 @@ import gym
 import Panda_Env #Library defined for the panda environment
 import mujoco_py
 import random
-import do_mpc
 
+import os
 random.seed(0)
 np.random.seed(0)
 import scipy
@@ -17,7 +17,7 @@ def _Mx(M,J):
     return Mx,Mx_inv
 
 
-
+os.chdir(os.path.dirname(os.path.realpath(__file__)))
 env=gym.make("PandaEnv-v0")
 
 env.seed(0)
@@ -26,9 +26,9 @@ obs=env.reset()
 joints=9
 _MNN_vector = np.zeros(joints ** 2)
 
+approximate=False
 
 ID=inverse_dynamics_control(env=env,njoints=joints,target=obs["desired_goal"])
-q_des=ID.find_qdes()
 id=env.sim.model.site_name2id("panda:grip")
 J=ID.Jp(id)
 A=np.zeros([6,6])
@@ -39,7 +39,8 @@ B[3:,:]=np.eye(3)
 #Ts=1/1000
 
 #Ad=np.eye(joints*2)+A*Ts
-
+controller_class = ["impedance", "gravity_compensation", "inverse_dynamics_task_space", "inverse_dynamics_joint_space"]
+controller = controller_class[2]
 
 
 N=20
@@ -59,8 +60,8 @@ for j in range(N**2):
     Q=np.diag([Q_pos, Q_pos,Q_pos,Q_vel,Q_vel,Q_vel])
     R=np.eye(3)/100
 
-
-    dist_con=(1+np.exp(-np.linalg.norm(obs["desired_goal"]-obs["achieved_goal"])))/2
+    dist_factor = np.linalg.norm(obs["desired_goal"] - obs["achieved_goal"]) / init_dist
+    dist_con = (1 + np.exp(-dist_factor)) / 2
     vel_con=(1+np.exp(-np.linalg.norm(obs["observation"][3:])))/2
     #data[j,2]=np.linalg.norm(obs["desired_goal"]-obs["achieved_goal"])/init_dist
     data[j,2]=vel_con*dist_con
@@ -70,20 +71,12 @@ for j in range(N**2):
     #Kp[2,2]=Kp[2,2]*1.5
 
     K=np.asarray(K)
-
-    Kp=np.eye(3)*300 #Check out impedance controller: [100,800,1000] , inverse dynamics controller [200 500 1000]
-    Kp[0,0]=Kp[0,0]
-    Kp[1,1]=Kp[1,1]
-    Kp[2,2]=Kp[2,2]
-    Kd=np.sqrt(Kp)*2
-
     Kp=K[:,:3]
     Kd=K[:,3:]
 
-    controller_class=["impedance","gravity_compensation", "inverse_dynamics_task_space","inverse_dynamics_joint_space"]
-    controller = controller_class[0]
 
-    weighted=False
+
+    weighted=True #Forces some torques to be 0
     zero_vel=False
 
 
@@ -113,7 +106,12 @@ for j in range(N**2):
             u+=np.dot(J.T,wM_des)
 
         elif controller==controller_class[2]: #Inverse dynamics control
-            u += np.dot(J.T, np.dot(Mx, wM_des))
+            if approximate:
+                diag_M = Mx.diagonal()
+                approx_M = np.diag(diag_M)
+                u += np.dot(J.T, np.dot(approx_M, wM_des))
+            else:
+                u += np.dot(J.T, np.dot(Mx, wM_des))
         #elif controller==controller_class[3]:
         #    x=np.hstack((env.sim.data.qpos,env.sim.data.qvel))
         #    x[:joints]=x[:joints]-q_des
@@ -138,13 +136,14 @@ for j in range(N**2):
         obs,reward,done,info=env.step(torque)
         #env.render()
         data[j, 4]+=reward
-        dist_con = (1 + np.exp(-np.linalg.norm(obs["desired_goal"] - obs["achieved_goal"]))) / 2
+        dist_factor=np.linalg.norm(obs["desired_goal"] - obs["achieved_goal"])/init_dist
+        dist_con = (1 + np.exp(-dist_factor)) / 2
         vel_con = (1 + np.exp(-np.tanh(np.linalg.norm(obs["observation"][3:])))) / 2
         # data[j,2]=np.linalg.norm(obs["desired_goal"]-obs["achieved_goal"])/init_dist
         data[j, 2] = np.maximum(vel_con * dist_con, data[j, 2])
         #print(np.hstack((env.sim.data.qpos[4], env.sim.data.qpos[6:])))
 
-        data[j,3]=np.maximum(np.linalg.norm(obs["desired_goal"] - obs["achieved_goal"])>init_dist,data[j,3])
+        data[j,3]=np.maximum(np.linalg.norm(obs["desired_goal"] - obs["achieved_goal"])-init_dist,data[j,3])
 
     #if info["is_success"]:
     #    print("reached target")
@@ -155,4 +154,4 @@ for j in range(N**2):
     print((obs["desired_goal"]-obs["achieved_goal"]))
 
 
-np.savetxt('data_arm_impedance.csv', data, delimiter=',')
+np.savetxt('data_arm_full.csv', data, delimiter=',')

@@ -55,7 +55,7 @@ class PandaEnv(gym.GoalEnv):
             observation=spaces.Box(-np.inf, np.inf, shape=obs['observation'].shape, dtype='float32'),
         ))
 
-
+        self.init_dist=1
 
 
     def dt(self):
@@ -77,6 +77,9 @@ class PandaEnv(gym.GoalEnv):
             'is_success': self._is_success(obs['achieved_goal'], self.goal),
         }
         reward = self.compute_reward(obs['achieved_goal'], self.goal, info)
+        reward+=np.linalg.norm(np.tanh(action)/5)**2
+        reward+=np.linalg.norm(np.tanh(obs["observation"][3:])/5)**2
+        reward*=-1
         return obs, reward, done, info
 
     def reset(self):
@@ -91,6 +94,7 @@ class PandaEnv(gym.GoalEnv):
             did_reset_sim = self._reset_sim()
         self.goal = self._sample_goal().copy()
         obs = self._get_obs()
+        self.init_dist=np.linalg.norm(obs["desired_goal"] - obs["achieved_goal"])
         return obs
 
     def close(self):
@@ -146,21 +150,21 @@ class PandaEnv(gym.GoalEnv):
         #grip_velp = self.sim.data.get_body_xvelp('panda_rightfinger') * dt
         #robot_qpos, robot_qvel = utils.robot_get_obs(self.sim)
         grip_pos = self.sim.data.get_site_xpos('panda:grip')
-        dt = self.sim.nsubsteps * self.sim.model.opt.timestep
-        grip_velp = self.sim.data.get_site_xvelp('panda:grip') * dt
-        robot_qpos, robot_qvel = utils.robot_get_obs(self.sim)
-        object_pos = object_rot = object_velp = object_velr = object_rel_pos = np.zeros(0)
-        gripper_state = robot_qpos[-2:]
-        gripper_vel = robot_qvel[-2:] * dt  # change to a scalar if the gripper is made symmetric
+        #dt = self.sim.nsubsteps * self.sim.model.opt.timestep
+        grip_velp = self.sim.data.get_site_xvelp('panda:grip')#* dt
+        #robot_qpos, robot_qvel = utils.robot_get_obs(self.sim)
+        #object_pos = object_rot = object_velp = object_velr = object_rel_pos = np.zeros(0)
+        #gripper_state = robot_qpos[-2:]
+        #gripper_vel = robot_qvel[-2:] * dt  # change to a scalar if the gripper is made symmetric
 
 
         achieved_goal = grip_pos.copy()
 
-        obs = np.concatenate([
-            grip_pos, object_pos.ravel(), object_rel_pos.ravel(), gripper_state, object_rot.ravel(),
-            object_velp.ravel(), object_velr.ravel(), grip_velp, gripper_vel,
-        ])
-
+        #obs = np.concatenate([
+        #    grip_pos, object_pos.ravel(), object_rel_pos.ravel(), gripper_state, object_rot.ravel(),
+        #    object_velp.ravel(), object_velr.ravel(), grip_velp, gripper_vel,
+        #])
+        obs=np.concatenate([grip_pos,grip_velp])
         return {
             'observation': obs.copy(),
             'achieved_goal': achieved_goal.copy(),
@@ -201,12 +205,12 @@ class PandaEnv(gym.GoalEnv):
 
     def _sample_goal(self):
         scale=np.eye(3)
-        scale[0,0]=3.5
-        scale[1,1]=3.5
-        scale[2, 2] = 0.35
+        scale[0,0]=3#7
+        scale[1,1]=3#7
+        scale[2, 2] = 0.8 #0.35
         goal = np.dot(scale,self.initial_gripper_xpos[:3])
-        goal[0]=goal[0]+ self.np_random.uniform(-self.target_range, self.target_range, size=1)
-        goal[1] = goal[1] + self.np_random.uniform(-self.target_range, self.target_range, size=1)
+        #goal[0]=goal[0]+ self.np_random.uniform(-self.target_range, self.target_range, size=1)
+        #goal[1] = goal[1] + self.np_random.uniform(-self.target_range, self.target_range, size=1)
         return goal.copy()
 
     def _render_callback(self):
@@ -217,8 +221,8 @@ class PandaEnv(gym.GoalEnv):
         self.sim.forward()
 
     def compute_reward(self, achieved_goal, goal, info):
-
-        return 0
+        reward=(np.linalg.norm(achieved_goal-goal)/self.init_dist)**2
+        return reward
 
 
 

@@ -37,16 +37,21 @@ A[:3,3:]=np.eye(3)
 B=np.zeros([6,3])
 
 #Ts=1/1000
-
+region=2
 #Ad=np.eye(joints*2)+A*Ts
 
-qr_region_1=2.526
-qd_region_1=1.263
-region=1
+#qr_region_1=2.526
+#qd_region_1=1.263
+qr_region_1=6
+qd_region_1=1.5
+
+
+
 B[3:,:]=np.eye(3)
 
-qr_region_2=3.7895
+qr_region_2=3.15784
 qd_region_2=0
+
 if region==1:
     Q_pos=np.power(10,qr_region_1)
     Q_vel=np.sqrt(Q_pos)*qd_region_1
@@ -55,9 +60,10 @@ else:
     Q_pos = np.power(10, qr_region_2)
     Q_vel = np.sqrt(Q_pos) * qd_region_2
 
+
 Q=np.diag([Q_pos, Q_pos,Q_pos,Q_vel,Q_vel,Q_vel])
 R=np.eye(3)/100
-
+approximate=True
 
 
 P=np.matrix(scipy.linalg.solve_continuous_are(A,B,Q,R))
@@ -79,7 +85,7 @@ Kd=K[:,3:]
 controller_class=["impedance","gravity_compensation", "inverse_dynamics_task_space","inverse_dynamics_joint_space"]
 controller = controller_class[2]
 
-weighted=False
+weighted=True
 zero_vel=False
 
 
@@ -99,11 +105,25 @@ for i in range(3000):
 
     wM_des = np.dot(Kp, (obs["desired_goal"] - obs["achieved_goal"]))-np.dot(Kd,obs["observation"][3:])
 
-    if controller==controller_class[0]: #Impedance control
-        u+=np.dot(J.T,wM_des)
+    if controller == controller_class[0]:  # Impedance control
 
-    elif controller==controller_class[2]: #Inverse dynamics control
-        u += np.dot(J.T, np.dot(Mx, wM_des))
+        u += np.dot(J.T, wM_des)
+
+
+    elif controller == controller_class[2]:  # Inverse dynamics control
+
+        if approximate:
+
+            diag_M = Mx.diagonal()
+
+            approx_M = np.diag(diag_M)
+
+            u += np.dot(J.T, np.dot(approx_M, wM_des))
+
+        else:
+
+            u += np.dot(J.T, np.dot(Mx, wM_des))
+
 
     if weighted:
         T1 = np.zeros(9)
