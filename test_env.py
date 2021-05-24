@@ -26,43 +26,49 @@ obs=env.reset()
 joints=9
 _MNN_vector = np.zeros(joints ** 2)
 
-
-ID=inverse_dynamics_control(env=env,njoints=joints,target=obs["desired_goal"])
-q_des=ID.find_qdes()
+print(env.Tmax)
+ID=inverse_dynamics_control(env=env,njoints=joints,target=env.goal)
 id=env.sim.model.site_name2id("panda:grip")
 J=ID.Jp(id)
 A=np.zeros([6,6])
 #A=np.zeros([18,18])
 A[:3,3:]=np.eye(3)
 B=np.zeros([6,3])
+B[3:,:]=np.eye(3)
 
 #Ts=1/1000
-region=2
+region=2 #region=2 gosafe maximum
 #Ad=np.eye(joints*2)+A*Ts
 
 #qr_region_1=2.526
 #qd_region_1=1.263
-qr_region_1=6
-qd_region_1=1.5
 
 
 
-B[3:,:]=np.eye(3)
+#q_2=6.15784
+#r_2=9.47
+q_2=6*0.8
+r_2=np.power(10.,3*0.2)
 
-qr_region_2=3.15784
-qd_region_2=0
+
+
+
+q_1 = 6*0.98873
+r_1 = np.power(10.,3*0.01695)
+
 
 if region==1:
-    Q_pos=np.power(10,qr_region_1)
-    Q_vel=np.sqrt(Q_pos)*qd_region_1
+    Q_pos=np.power(10,q_1)
+    Q_vel=np.sqrt(Q_pos)*0.1
+    R = np.eye(3) / 100*r_1
 
 else:
-    Q_pos = np.power(10, qr_region_2)
-    Q_vel = np.sqrt(Q_pos) * qd_region_2
-
+    Q_pos = np.power(10., q_2)
+    Q_vel = np.sqrt(Q_pos) * 0.1
+    R = np.eye(3) / 100 * r_2
 
 Q=np.diag([Q_pos, Q_pos,Q_pos,Q_vel,Q_vel,Q_vel])
-R=np.eye(3)/100
+
 approximate=True
 
 
@@ -83,65 +89,104 @@ Kp=K[:,:3]
 Kd=K[:,3:]
 
 controller_class=["impedance","gravity_compensation", "inverse_dynamics_task_space","inverse_dynamics_joint_space"]
-controller = controller_class[2]
+controller = controller_class[0]
 
 weighted=True
-zero_vel=False
 
 
+init_dist = np.linalg.norm(env.goal - obs["achieved_goal"])
+dist_factor = np.linalg.norm(env.goal - obs["achieved_goal"]) / init_dist
+dist_con = (1 + np.exp(-dist_factor)) / 2
+vel_con = (1 + np.exp(-0.5*np.tanh(np.linalg.norm(obs["observation"][3:])))) / 2
 
+print(obs["observation"][3:])
+constraint_1=dist_con*vel_con
+constraint_2=0
+Total_reward=0
+contraint_3=0
+constraint_4=0
+constraint_5=0
 
-for i in range(3000):
-    action=env.action_space.sample()
-    bias=ID.g()
-    M=ID.M()
+num_steps=2000
+eigen_value=np.linalg.eig(A-np.dot(B,K))
+eigen_value=np.max(np.asarray(eigen_value[0]).real)
 
+print(eigen_value)
+for i in range(num_steps):
 
-    id=env.sim.model.site_name2id("panda:grip")
+    bias = ID.g()
+    M = ID.M()
 
-    J=ID.Jp(id)
+    # data[j, 2] = np.maximum(data[j,2],np.linalg.norm(obs["desired_goal"] - obs["achieved_goal"])/init_dist)
+
+    id = env.sim.model.site_name2id("panda:grip")
+    # J=env.sim.data.site_jacp[id,:]
+    # J=J.reshape(3,-1)
+    J = ID.Jp(id)
     u = -bias
-    Mx,Mx_inv=_Mx(M,J)
+    Mx, Mx_inv = ID.Mx(M, J)
 
-    wM_des = np.dot(Kp, (obs["desired_goal"] - obs["achieved_goal"]))-np.dot(Kd,obs["observation"][3:])
+    wM_des = np.dot(Kp, (obs["desired_goal"] - obs["achieved_goal"])) - np.dot(Kd, obs["observation"][3:] - np.ones(
+        3) * 1 / env.Tmax * (i < env.Tmax))
 
     if controller == controller_class[0]:  # Impedance control
-
         u += np.dot(J.T, wM_des)
 
-
     elif controller == controller_class[2]:  # Inverse dynamics control
-
         if approximate:
-
             diag_M = Mx.diagonal()
-
             approx_M = np.diag(diag_M)
-
             u += np.dot(J.T, np.dot(approx_M, wM_des))
-
         else:
-
             u += np.dot(J.T, np.dot(Mx, wM_des))
+    # elif controller==controller_class[3]:
+    #    x=np.hstack((env.sim.data.qpos,env.sim.data.qvel))
+    #    x[:joints]=x[:joints]-q_des
 
+    #    u+=np.dot(M,np.dot(-K,x))
 
     if weighted:
         T1 = np.zeros(9)
-        T1[4] = 1
-        T1[6:] = 1
+        T1[4:] = 1
+        #T1[6:] = 1
         T = np.diag(T1)
         N = np.eye(9) - np.dot(np.linalg.pinv(T, rcond=1e-4), T)
         N_bar = np.dot(N, np.linalg.pinv(np.dot(np.eye(9), N), rcond=1e-4))
-        torque=np.dot(N_bar,u)
+        torque = np.dot(N_bar, u)
     else:
-        torque=u
+        torque = u
 
-    obs,reward,done,info=env.step(torque)
+
+    # torque=np.clip(torque,env.action_space.low,env.action_space.high)
+    noise=np.maximum(np.random.normal(size=9)*torque,0.1*np.ones(9))
+    obs, reward, done, info = env.step(torque+noise)
     env.render()
+    Total_reward += reward
+    dist_factor = np.linalg.norm(env.goal - obs["achieved_goal"]) / init_dist
+    dist_con = (1 + np.exp(-dist_factor)) / 2
+    vel_con = (1 + np.exp(-0.5*np.tanh(np.linalg.norm(obs["observation"][3:])))) / 2
+    # data[j,2]=np.linalg.norm(obs["desired_goal"]-obs["achieved_goal"])/init_dist
+    constraint_1 = np.maximum(vel_con * dist_con, constraint_1)
+    # print(np.hstack((env.sim.data.qpos[4], env.sim.data.qpos[6:])))
+
+    constraint_2 = np.maximum(np.linalg.norm(env.goal - obs["achieved_goal"]) - init_dist, constraint_2)
+    input_bounds=(np.abs(torque) - env.action_space.high)/env.action_space.high
+    input_bounds=np.max(input_bounds)
+    contraint_3=np.maximum(contraint_3,input_bounds)
+
+    constraint_4 = np.maximum(np.max(np.abs(obs["observation"][3:])),constraint_4)
+# if info["is_success"]:
+#    print("reached target")
+#    env.reset()
+Total_reward *= 1 / num_steps
+constraint_2/=init_dist
+# data[j, 3] = np.linalg.norm(obs["desired_goal"] - obs["achieved_goal"])
+
+#print((obs["desired_goal"] - obs["achieved_goal"]))
 
 
 
 
-
-print((obs["desired_goal"]-obs["achieved_goal"]))
+print(contraint_3,constraint_2,constraint_4)
+#print((obs["desired_goal"]-obs["achieved_goal"]),constraint_1,constraint_2,contraint_3,Total_reward)
 

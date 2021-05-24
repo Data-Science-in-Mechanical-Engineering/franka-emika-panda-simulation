@@ -1,0 +1,26 @@
+Hyperparams:
+
+beta=4
+eta=0.1
+tol=0.05
+eps=0.1
+s1_steps=30
+s2_steps=10
+s3_steps=10
+max_expansion_steps=100
+lengthscale=0.8
+boundary ratio=1
+kernel matern32
+Velocity and position length scales: 0.5,0.5,0.5,20/7,20/7,20/7
+noise_std=0.1
+iteraions=200
+
+max_size=400
+reset_size=200
+
+Results:
+safety 97%
+optimum 6*0.71456,3*0.0903
+
+time: mean 0.979
+      std: 0.87

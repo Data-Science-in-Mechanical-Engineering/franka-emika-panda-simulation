@@ -40,7 +40,9 @@ class PandaEnv(gym.GoalEnv):
         self.seed()
         self._env_setup(initial_qpos=initial_qpos)
         self.initial_state=copy.deepcopy(self.sim.get_state())
-
+        self.init_pos=self.sim.data.get_site_xpos('panda:grip')
+        self.T = 0
+        self.Tmax=1000
         self.goal = self._sample_goal()
         obs=self._get_obs()
 
@@ -76,9 +78,9 @@ class PandaEnv(gym.GoalEnv):
         info = {
             'is_success': self._is_success(obs['achieved_goal'], self.goal),
         }
-        reward = self.compute_reward(obs['achieved_goal'], self.goal, info)
+        reward = self.compute_reward(obs['achieved_goal'], obs["desired_goal"], info)
         reward+=np.linalg.norm(np.tanh(action)/5)**2
-        reward+=np.linalg.norm(np.tanh(obs["observation"][3:])/5)**2
+        reward+=np.linalg.norm(np.tanh(obs["observation"][3:]-np.ones(3)*1/self.Tmax*(self.T<self.Tmax))/5)**2
         reward*=-1
         return obs, reward, done, info
 
@@ -94,7 +96,9 @@ class PandaEnv(gym.GoalEnv):
             did_reset_sim = self._reset_sim()
         self.goal = self._sample_goal().copy()
         obs = self._get_obs()
-        self.init_dist=np.linalg.norm(obs["desired_goal"] - obs["achieved_goal"])
+        self.init_dist=np.linalg.norm(self.goal - obs["achieved_goal"])
+        self.T=0
+        self.init_pos = self.sim.data.get_site_xpos('panda:grip')
         return obs
 
     def close(self):
@@ -165,10 +169,15 @@ class PandaEnv(gym.GoalEnv):
         #    object_velp.ravel(), object_velr.ravel(), grip_velp, gripper_vel,
         #])
         obs=np.concatenate([grip_pos,grip_velp])
+        goal=self.goal.copy()
+        goal=goal-self.init_pos
+        goal=goal/self.Tmax*np.minimum(self.T,self.Tmax)+self.init_pos
+        self.T+=1
         return {
             'observation': obs.copy(),
             'achieved_goal': achieved_goal.copy(),
-            'desired_goal': self.goal.copy(),
+            #'desired_goal': self.goal.copy(),
+            'desired_goal': goal.copy(),
         }
 
     def _step_callback(self):
@@ -201,6 +210,12 @@ class PandaEnv(gym.GoalEnv):
     def _reset_sim(self):
         self.sim.set_state(self.initial_state)
         self.sim.forward()
+        for i in range(250):
+            u = self.sim.data.qfrc_bias
+            u = np.clip(u, self.action_space.low, self.action_space.high)
+            self._set_action(u)
+            self.sim.step()
+            self._step_callback()
         return True
 
     def _sample_goal(self):
