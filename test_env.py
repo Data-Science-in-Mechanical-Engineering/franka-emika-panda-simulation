@@ -3,8 +3,8 @@ import gym
 import Panda_Env #Library defined for the panda environment
 import mujoco_py
 import random
-
-
+import matplotlib.pyplot as plt
+plt.rcParams.update({'font.size': 16})
 random.seed(0)
 np.random.seed(0)
 import scipy
@@ -22,6 +22,7 @@ env=gym.make("PandaEnv-v0")
 
 env.seed(0)
 obs=env.reset()
+env.render()
 #()
 joints=9
 _MNN_vector = np.zeros(joints ** 2)
@@ -47,15 +48,16 @@ region=2 #region=2 gosafe maximum
 
 #q_2=6.15784
 #r_2=9.47
-q_2=6*0.8
-r_2=np.power(10.,3*0.2)
+q_2=6*0.93613194
+r_2=np.power(10.,3*0.43381287)
 
 
 
 
-q_1 = 6*0.98873
-r_1 = np.power(10.,3*0.01695)
-
+#q_1 = 6*0.98873
+#r_1 = np.power(10.,3*0.01695)
+q_1=6
+r_1 = np.power(10.,3*0.14768434)
 
 if region==1:
     Q_pos=np.power(10,q_1)
@@ -108,12 +110,17 @@ constraint_4=0
 constraint_5=0
 
 num_steps=2000
+states=np.zeros([6,num_steps])
 eigen_value=np.linalg.eig(A-np.dot(B,K))
 eigen_value=np.max(np.asarray(eigen_value[0]).real)
 
+reference=np.zeros([6,num_steps])
 print(eigen_value)
-for i in range(num_steps):
 
+for i in range(num_steps):
+    states[:,i]=obs["observation"]
+    reference[:,i]=np.hstack((obs["desired_goal"],np.ones(
+        3) * 1 / env.Tmax * (i < env.Tmax)))
     bias = ID.g()
     M = ID.M()
 
@@ -147,8 +154,8 @@ for i in range(num_steps):
 
     if weighted:
         T1 = np.zeros(9)
-        T1[4:] = 1
-        #T1[6:] = 1
+        T1[4] = 1
+        T1[6:] = 1
         T = np.diag(T1)
         N = np.eye(9) - np.dot(np.linalg.pinv(T, rcond=1e-4), T)
         N_bar = np.dot(N, np.linalg.pinv(np.dot(np.eye(9), N), rcond=1e-4))
@@ -158,8 +165,8 @@ for i in range(num_steps):
 
 
     # torque=np.clip(torque,env.action_space.low,env.action_space.high)
-    noise=np.maximum(np.random.normal(size=9)*torque,0.1*np.ones(9))
-    obs, reward, done, info = env.step(torque+noise)
+    #noise=np.maximum(np.random.normal(size=9)*torque,0.1*np.ones(9))
+    obs, reward, done, info = env.step(torque)
     env.render()
     Total_reward += reward
     dist_factor = np.linalg.norm(env.goal - obs["achieved_goal"]) / init_dist
@@ -184,9 +191,20 @@ constraint_2/=init_dist
 
 #print((obs["desired_goal"] - obs["achieved_goal"]))
 
-
-
-
+fig, axs = plt.subplots(6, sharex=True,figsize=(12, 9.6))
+fig.suptitle("State Evolution GoSafe")
+ylabel=['$r_{e,x}$','$r_{e,y}$','$r_{e,z}$','$v_{e,x}$','$v_{e,y}$','$v_{e,z}$']
+t=np.linspace(0,1999,2000)
+for i in range(6):
+    axs[i].plot(t,states[i,:],label="x" if i == 0 else "")
+    axs[i].plot(t,reference[i,:],label="r" if i == 0 else "")
+    #axs[i].set_xlabel('t')
+    axs[i].set_ylabel(ylabel[i])
+fig.legend(loc='center right')
+plt.xlabel('$t$')
+fig.show()
+fig.align_ylabels(axs)
+fig.savefig("GoSafeStates.png",dpi=300)
 print(contraint_3,constraint_2,constraint_4)
 #print((obs["desired_goal"]-obs["achieved_goal"]),constraint_1,constraint_2,contraint_3,Total_reward)
 

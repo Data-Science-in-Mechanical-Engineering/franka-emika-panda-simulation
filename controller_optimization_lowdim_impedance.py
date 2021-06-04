@@ -10,8 +10,7 @@ from osc_controller import inverse_dynamics_control
 import GPy
 import random
 import time
-random.seed(10)
-np.random.seed(10)
+import logging
 class System(object):
 
     def __init__(self,position_bound,velocity_bound,rollout_limit=0,upper_eigenvalue=0):
@@ -94,10 +93,16 @@ class System(object):
                 opt.s3_steps=np.maximum(0,opt.s3_steps-1)
                 return 0,0,0,state
 
+        elif eigen_value>self.upper_eigenvalue:
+            self.at_boundary=True
+            self.Fail=True
+            print("Eigenvalues too high ",end="")
+            return 0,0,0,state
+
 
         if render:
             init_dist = np.linalg.norm(self.env.goal - self.obs["achieved_goal"])
-
+            #init_dist=self.init_dist
             for i in range(self.T):
 
                 bias = self.ID.g()
@@ -121,7 +126,7 @@ class System(object):
 
         else:
             init_dist = np.linalg.norm(self.env.goal - self.obs["achieved_goal"])
-
+            #init_dist = self.init_dist
             for i in range(self.T):
                 if opt is not None and not self.at_boundary:
                     obs=self.obs["observation"].copy()
@@ -129,10 +134,11 @@ class System(object):
                     obs[:3]/=self.position_bound
                     obs[3:]/=self.velocity_bound
                     #obs[3:]=opt.x_0[:,3:]
-                    self.at_boundary, self.Fail, params = opt.check_rollout(state=obs.reshape(1,-1), action=params)
+                    if i %10==0:
+                        self.at_boundary, self.Fail, params = opt.check_rollout(state=obs.reshape(1,-1), action=params)
 
                     if self.Fail:
-                        print("Failed",i,end="")
+                        print("FAILED                  ",i,end=" ")
                         return 0, 0,0,state
                     elif self.at_boundary:
                         params = params.squeeze()
@@ -178,11 +184,12 @@ class System(object):
 
 
 
-        return Objective/self.T,constraint2,eigen_value,state
+        return Objective/self.T,constraint2/init_dist,eigen_value,state
 
 
     def reset(self,x0=None):
         self.obs = self.env.reset()
+        #self.init_dist = np.linalg.norm(self.env.goal - self.obs["achieved_goal"])
         self.Fail=False
         self.at_boundary=False
 
@@ -217,13 +224,14 @@ class System(object):
 
 
 class SafeOpt_Optimizer(object):
-    def __init__(self, upper_overshoot=0.05,upper_eigenvalue=-10, lengthscale=0.65, ARD=True):
+    def __init__(self, upper_overshoot=0.08,upper_eigenvalue=-10, lengthscale=0.5, ARD=True):
         self.upper_eigenvalue=upper_eigenvalue
         self.upper_overshoot=upper_overshoot
         q=4/6
         r=-1
         self.params = np.asarray([q, r])
         self.failures = 0
+        self.failure_overshoot = 0
         self.mean_reward = -0.33
         self.std_reward = 0.14
         self.eigen_value_std = 21
@@ -245,16 +253,16 @@ class SafeOpt_Optimizer(object):
         g1 = g1.reshape(-1, 1)
         L = [lengthscale / 6, lengthscale / 3]
         x=self.params.reshape(1,-1)
-        KERNEL_f = GPy.kern.sde_Matern32(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
-        # KERNEL_f = GPy.kern.sde_RBF(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
-        KERNEL_g = GPy.kern.sde_Matern52(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
-        # KERNEL_g = GPy.kern.sde_RBF(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
+        #KERNEL_f = GPy.kern.sde_Matern32(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
+        KERNEL_f = GPy.kern.sde_RBF(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
+        #KERNEL_g = GPy.kern.sde_Matern52(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
+        KERNEL_g = GPy.kern.sde_RBF(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
         gp0 = GPy.models.GPRegression(x[0, :].reshape(1, -1), f, noise_var=0.1 ** 2, kernel=KERNEL_f)
         gp1 = GPy.models.GPRegression(x[0, :].reshape(1, -1), g1, noise_var=0.1 ** 2, kernel=KERNEL_g)
 
         bounds = [[1 / 3, 1], [-1, 1]]
 
-        self.opt = SafeOptSwarm([gp0, gp1], fmin=[-np.inf, 0], bounds=bounds, beta=4)
+        self.opt = SafeOptSwarm([gp0, gp1], fmin=[-np.inf, 0], bounds=bounds, beta=3)
         self.time_recorded = []
         self.simulate_data()
 
@@ -262,7 +270,7 @@ class SafeOpt_Optimizer(object):
         p = [5/6,1]
         d = [-0.9,-2/3]
 
-        for i in range(1):
+        for i in range(2):
             self.params = np.asarray([p[i],d[i]])
             f, g1,g2,state = self.sys.simulate(self.params,update=True)
             g2 = self.upper_eigenvalue - g2
@@ -295,6 +303,8 @@ class SafeOpt_Optimizer(object):
         y = y.squeeze()
         self.opt.add_new_data_point(param.reshape(1, -1), y)
         constraint_satisified = g1 >= 0 and g2 >= 0
+        if not constraint_satisified:
+            self.failure_overshoot += -(g1*self.upper_overshoot)+self.upper_overshoot
         self.failures += constraint_satisified
         print(f, g1, g2, constraint_satisified)
 
@@ -304,13 +314,14 @@ class SafeOpt_Optimizer(object):
 
 class GoSafe_Optimizer(object):
 
-    def __init__(self, upper_overshoot=0.05,upper_eigenvalue=-10, lengthscale=0.65, ARD=True):
+    def __init__(self, upper_overshoot=0.08,upper_eigenvalue=-10, lengthscale=0.5, ARD=True):
         self.upper_eigenvalue=upper_eigenvalue
         self.upper_overshoot=upper_overshoot
         q =4/6
         r = -1
         self.params = np.asarray([q,r])
         self.failures=0
+        self.failure_overshoot = 0
         self.rollout_limit = 500
         self.mean_reward = -0.33
         self.std_reward = 0.14
@@ -331,6 +342,7 @@ class GoSafe_Optimizer(object):
         f = f.reshape(-1, 1)
         g1 = np.asarray([[g1]])
         g1 = g1.reshape(-1, 1)
+
         #g2 = np.asarray([[g2]])
         #g2 = g2.reshape(-1, 1)
 
@@ -341,11 +353,12 @@ class GoSafe_Optimizer(object):
         x=np.asarray(state).squeeze()
 
 
-        L=[lengthscale/6,lengthscale/3,0.5,0.5,0.5,20/7,20/7,20/7]
-        KERNEL_f = GPy.kern.sde_Matern32(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
-        #KERNEL_f = GPy.kern.sde_RBF(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
-        KERNEL_g = GPy.kern.sde_Matern52(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
-        #KERNEL_g = GPy.kern.sde_RBF(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
+        L=[lengthscale/6,lengthscale/3,0.35,0.3,0.35,2,2,2]
+        #L = [lengthscale / 6, lengthscale / 3, 0.6, 0.5, 0.8, 24 / 7, 24 / 7, 24 / 7]
+        #KERNEL_f = GPy.kern.sde_Matern32(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
+        KERNEL_f = GPy.kern.sde_RBF(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
+        #KERNEL_g = GPy.kern.sde_Matern32(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
+        KERNEL_g = GPy.kern.sde_RBF(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
         gp0 = GPy.models.GPRegression(x[0,:].reshape(1,-1), f, noise_var=0.1 ** 2, kernel=KERNEL_f)
         gp1 = GPy.models.GPRegression(x[0,:].reshape(1,-1), g1, noise_var=0.1 ** 2, kernel=KERNEL_g)
         #gp2 = GPy.models.GPRegression(x[0, :].reshape(1, -1), g2, noise_var=0.01 ** 2, kernel=KERNEL_g)
@@ -355,12 +368,13 @@ class GoSafe_Optimizer(object):
 
 
         bounds = [[1/3, 1], [-1, 1],
-                           [-1, 1],[-1, 1],[-1, 1],[-1,1],[-1, 1],[-1, 1]]
+                           [-0.5, 0.5],[-0.2, 0.2],[0.5, 1],[-1,1],[-1, 1],[-1, 1]]
 
 
-        self.opt = GoSafeSwarm([gp0,gp1], fmin=[-np.inf, 0], bounds=bounds, beta=4,x_0=x0.reshape(-1,1),eta=0.1,tol=0.05,max_S2_steps=10,max_S1_steps=30,max_S3_steps=10,eps=0.1,max_expansion_steps=100,reset_size=400,max_data_size=800)
+        self.opt = GoSafeSwarm([gp0,gp1], fmin=[-np.inf, 0], bounds=bounds, beta=3.5,x_0=x0.reshape(-1,1),eta=0.1,tol=0.0,max_S2_steps=15,max_S1_steps=45,max_S3_steps=10,eps=0.1,max_expansion_steps=100,reset_size=500,max_data_size=1000)
+        self.opt.boundary_ratio=0.8
         self.opt.S3_x0_ratio=1
-        #self.opt.safety_cutoff=0.9
+        self.opt.safety_cutoff=0.9
         y = np.array([f, g1])
         y=y.squeeze()
         self.add_data(x,y)
@@ -372,7 +386,7 @@ class GoSafe_Optimizer(object):
         p = [5/6,1]
         d = [-0.9,-2/3]
 
-        for i in range(1):
+        for i in range(2):
             self.params = np.asarray([p[i],d[i]])
             f, g1,g2,state = self.sys.simulate(self.params,update=True,opt=self.opt)
             g2 = self.upper_eigenvalue - g2
@@ -388,7 +402,9 @@ class GoSafe_Optimizer(object):
             #self.opt.add_new_data_point(x, y)
 
 
-    def optimize(self):
+    def optimize(self,update_boundary=False):
+        if update_boundary:
+            self.opt.update_boundary_points()
         start_time = time.time()
         param = self.opt.optimize()
         self.time_recorded.append(time.time() - start_time)
@@ -406,15 +422,29 @@ class GoSafe_Optimizer(object):
         y = y.squeeze()
         if not self.sys.at_boundary:
             self.add_data(state,y)
-            constraint_satisified = g1 >= 0 and g2>=0
+            constraint_satisified = g1 >= 0
+            if not constraint_satisified:
+                self.failure_overshoot+=-(g1*self.upper_overshoot)+self.upper_overshoot
+                logging.warning("Hit Constraint")
+                print(" Hit Constraint         ",end="")
             self.failures += constraint_satisified
             print(f, g1,g2, self.opt.criterion, constraint_satisified)
         else:
             if not self.sys.Fail:
-                constraint_satisified = 1
+                constraint_satisified = g1 >= 0
+                if not constraint_satisified:
+                    self.failure_overshoot += -(g1 * self.upper_overshoot) + self.upper_overshoot
+                    logging.warning("Hit Constraint")
+                    print(" Hit Constraint         ",g1, end="")
+                self.opt.add_boundary_points(param)
                 self.failures += constraint_satisified
-            self.opt.add_boundary_points(param)
-            print(self.opt.criterion)
+            else:
+                constraint_satisified=g1>=0
+                if not constraint_satisified:
+                    logging.warning("Failed")
+
+
+            print(self.opt.criterion,constraint_satisified)
 
 
 
@@ -430,98 +460,145 @@ class GoSafe_Optimizer(object):
 
 
 #opt=SafeOpt_Optimizer()
-method="SafeOpt"
+#method="SafeOpt"
+method="GoSafe"
 iterations=201
+runs=5
+plot=True
 if method=="GoSafe":
-    opt=GoSafe_Optimizer()
+    Reward_data=np.zeros([41,runs])
+    Overshoot_summary=np.zeros([2,runs])
+    for r in range(runs):
+        j=0
+        opt = GoSafe_Optimizer()
+        random.seed(10+(runs-1-r))
+        np.random.seed(10+(runs-1-r))
+        opt.sys.env.seed((runs-1-r))
+        if r>0:
+            plot=False
+        for i in range(iterations):
+            if i%5==0:
+                maximum, fval = opt.opt.get_maximum()
+                Reward_data[j,r]=fval[0]
+                j+=1
+                if plot and i%20==0:
+                    q=np.linspace(-1,1,25)
+                    r_cost=np.linspace(-1,1,25)
+                    a = np.asarray(np.meshgrid(q, r_cost)).T.reshape(-1, 2)
 
-    for i in range(iterations):
-        if i%20==0:
-            q=np.linspace(-1,1,25)
-            r=np.linspace(-1,1,25)
-            a = np.asarray(np.meshgrid(q, r)).T.reshape(-1, 2)
+                    input=np.zeros([a.shape[0],2+opt.opt.state_dim])
+                    input[:,2:]=opt.opt.x_0
+                    input[:,:2]=a
+                    mean, var = opt.opt.gps[1].predict(input)
+                    std=np.sqrt(var)
+                    l_x0 = mean -opt.opt.beta(opt.opt.t)*std
+                    safe_idx=np.where(l_x0>=0)[0]
+                    values=np.zeros(a.shape[0])
+                    values[safe_idx]=1
 
-            input=np.zeros([a.shape[0],2+opt.opt.state_dim])
-            input[:,2:]=opt.opt.x_0
-            input[:,:2]=a
-            mean, var = opt.opt.gps[1].predict(input)
-            std=np.sqrt(var)
-            l_x0 = mean -opt.opt.beta(opt.opt.t)*std
-            safe_idx=np.where(l_x0>=0)[0]
-            values=np.zeros(a.shape[0])
-            values[safe_idx]=1
+                    mean, var = opt.opt.gps[0].predict(input)
+                    l_f = mean - opt.opt.beta(opt.opt.t) * std
 
-            mean, var = opt.opt.gps[0].predict(input)
-            l_f = mean - opt.opt.beta(opt.opt.t) * std
+                    safe_l_f=l_f[safe_idx]
+                    safe_max=np.where(l_f==safe_l_f.max())[0]
+                    optimum_params=a[safe_max,:]
+                    optimum_params=optimum_params.squeeze()
+                    q=np.reshape(a[:,0],[25,25])
+                    r_cost = np.reshape(a[:, 1], [25, 25])
+                    values = values.reshape([25, 25])
+                    colours = ['red', 'green']
+                    fig = plt.figure(figsize=(10, 10))
+                    left, bottom, width, height = 0.1, 0.1, 0.8, 0.8
+                    ax = fig.add_axes([left, bottom, width, height])
+                    ax.set_xlabel('q')
+                    ax.set_ylabel('r')
+                    cs = ax.contourf(q*6, r_cost*3, values)
+                    ax.scatter(q*6, r_cost*3, c=values, cmap=matplotlib.colors.ListedColormap(colours))
+                    ax.scatter(optimum_params[0]*6, optimum_params[1]*3, marker="<", color="b", s=np.asarray([200]))
+                    ax.set_title("Safe Set Belief, iter "+str(i))
+                    ax.set_ylim([-3.1, 3.1])
+                    ax.set_xlim([-6.1, 6.1])
 
-            safe_l_f=l_f[safe_idx]
-            safe_max=np.where(l_f==safe_l_f.max())[0]
-            optimum_params=a[safe_max,:]
-            optimum_params=optimum_params.squeeze()
-            q=np.reshape(a[:,0],[25,25])
-            r = np.reshape(a[:, 1], [25, 25])
-            values = values.reshape([25, 25])
-            colours = ['red', 'green']
-            fig = plt.figure(figsize=(10, 10))
-            left, bottom, width, height = 0.1, 0.1, 0.8, 0.8
-            ax = fig.add_axes([left, bottom, width, height])
-            ax.set_xlabel('q')
-            ax.set_ylabel('r')
-            cs = ax.contourf(q*6, r*3, values)
-            ax.scatter(q*6, r*3, c=values, cmap=matplotlib.colors.ListedColormap(colours))
-            ax.scatter(optimum_params[0]*6, optimum_params[1]*3, marker="<", color="b", s=np.asarray([200]))
-            ax.set_title("Safe Set Belief, iter "+str(i))
-            ax.set_ylim([-3.1, 3.1])
-            ax.set_xlim([-6.1, 6.1])
+                    plt.savefig('Safeset' + str(i) +'.png', dpi=300)
 
-            plt.savefig('Safeset' + str(i) +'.png', dpi=300)
+            update_boundary=False
+            if i%30==0:
+                update_boundary=True
+            opt.optimize(update_boundary=update_boundary)
+            print(i)
+        print(opt.failures / iterations)
+        Overshoot_summary[0, r] = opt.failures / iterations
+        failure=np.maximum(1e-3,iterations-opt.failures)
+        Overshoot_summary[1,r]=opt.failure_overshoot/(failure)
+        print(opt.failure_overshoot/(failure))
+        max, f = opt.opt.get_maximum()
+        print(max)
 
-        opt.optimize()
-        print(i)
+    np.savetxt('GoSafe_Overshoot.csv', Overshoot_summary, delimiter=',')
+    np.savetxt('GoSafe_Reward.csv', Reward_data, delimiter=',')
+
 
 elif method=="SafeOpt":
-    opt=SafeOpt_Optimizer()
 
-    for i in range(iterations):
-        if i%20==0:
-            q=np.linspace(-1,1,25)
-            r=np.linspace(-1,1,25)
-            a = np.asarray(np.meshgrid(q, r)).T.reshape(-1, 2)
-            input=a
-            mean, var = opt.opt.gps[1].predict(input)
-            std=np.sqrt(var)
-            l_x0 = mean -opt.opt.beta(opt.opt.t)*std
-            safe_idx=np.where(l_x0>=0)[0]
-            values=np.zeros(a.shape[0])
-            values[safe_idx]=1
+    Reward_data = np.zeros([41, runs])
+    Overshoot_summary = np.zeros([2, runs])
+    for r in range(runs):
+        j=0
+        opt = SafeOpt_Optimizer()
+        if r>0:
+            plot=False
+        for i in range(iterations):
+            if i%5==0:
+                maximum, f = opt.opt.get_maximum()
+                Reward_data[j, r] = f
+                j+=1
+                if plot and i%20==0:
+                    q=np.linspace(-1,1,25)
+                    r_cost=np.linspace(-1,1,25)
+                    a = np.asarray(np.meshgrid(q, r_cost)).T.reshape(-1, 2)
+                    input=a
+                    mean, var = opt.opt.gps[1].predict(input)
+                    std=np.sqrt(var)
+                    l_x0 = mean -opt.opt.beta(opt.opt.t)*std
+                    safe_idx=np.where(l_x0>=0)[0]
+                    values=np.zeros(a.shape[0])
+                    values[safe_idx]=1
 
-            mean, var = opt.opt.gps[0].predict(input)
-            l_f = mean - opt.opt.beta(opt.opt.t) * std
+                    mean, var = opt.opt.gps[0].predict(input)
+                    l_f = mean - opt.opt.beta(opt.opt.t) * std
 
-            safe_l_f=l_f[safe_idx]
-            safe_max=np.where(l_f==safe_l_f.max())[0]
-            optimum_params=a[safe_max,:]
-            optimum_params=optimum_params.squeeze()
-            q=np.reshape(a[:,0],[25,25])
-            r = np.reshape(a[:, 1], [25, 25])
-            values = values.reshape([25, 25])
-            colours = ['red', 'green']
-            fig = plt.figure(figsize=(10, 10))
-            left, bottom, width, height = 0.1, 0.1, 0.8, 0.8
-            ax = fig.add_axes([left, bottom, width, height])
-            ax.set_xlabel('q')
-            ax.set_ylabel('r')
-            cs = ax.contourf(q*6, r*3, values)
-            ax.scatter(q*6, r*3, c=values, cmap=matplotlib.colors.ListedColormap(colours))
-            ax.scatter(optimum_params[0]*6, optimum_params[1]*3, marker="<", color="b", s=np.asarray([200]))
-            ax.set_title("Safe Set Belief, iter "+str(i))
-            ax.set_ylim([-3.1, 3.1])
-            ax.set_xlim([-6.1, 6.1])
+                    safe_l_f=l_f[safe_idx]
+                    safe_max=np.where(l_f==safe_l_f.max())[0]
+                    optimum_params=a[safe_max,:]
+                    optimum_params=optimum_params.squeeze()
+                    q=np.reshape(a[:,0],[25,25])
+                    r_cost = np.reshape(a[:, 1], [25, 25])
+                    values = values.reshape([25, 25])
+                    colours = ['red', 'green']
+                    fig = plt.figure(figsize=(10, 10))
+                    left, bottom, width, height = 0.1, 0.1, 0.8, 0.8
+                    ax = fig.add_axes([left, bottom, width, height])
+                    ax.set_xlabel('q')
+                    ax.set_ylabel('r')
+                    cs = ax.contourf(q*6, r_cost*3, values)
+                    ax.scatter(q*6, r_cost*3, c=values, cmap=matplotlib.colors.ListedColormap(colours))
+                    ax.scatter(optimum_params[0]*6, optimum_params[1]*3, marker="<", color="b", s=np.asarray([200]))
+                    ax.set_title("Safe Set Belief, iter "+str(i))
+                    ax.set_ylim([-3.1, 3.1])
+                    ax.set_xlim([-6.1, 6.1])
 
-            plt.savefig('Safeset' + str(i) +'.png', dpi=300)
+                    plt.savefig('Safeset' + str(i) +'.png', dpi=300)
 
-        opt.optimize()
-        print(i)
+            opt.optimize()
+            print(i)
+        print(opt.failures / iterations)
+
+        Overshoot_summary[0, r] = opt.failures / iterations
+        failure=np.maximum(1e-3,iterations-opt.failures)
+        Overshoot_summary[1, r] = opt.failure_overshoot / (failure)
+
+    np.savetxt('SafeOpt_Overshoot.csv', Overshoot_summary, delimiter=',')
+    np.savetxt('SafeOpt_Reward.csv', Reward_data, delimiter=',')
 
 
 
@@ -532,7 +609,7 @@ time_recorder=np.asarray(opt.time_recorded)
 print("Time:",time_recorder.mean(),time_recorder.std())
 print("maximum",max)
 
-f,g1,g2,state=opt.sys.simulate(max,update=True,render=True)
+#f,g1,g2,state=opt.sys.simulate(max,update=True,render=True)
 
 
 
