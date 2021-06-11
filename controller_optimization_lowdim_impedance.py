@@ -371,7 +371,7 @@ class GoSafe_Optimizer(object):
                            [-0.5, 0.5],[-0.2, 0.2],[0.5, 1],[-1,1],[-1, 1],[-1, 1]]
 
 
-        self.opt = GoSafeSwarm([gp0,gp1], fmin=[-np.inf, 0], bounds=bounds, beta=3.5,x_0=x0.reshape(-1,1),eta=0.1,tol=0.0,max_S2_steps=15,max_S1_steps=45,max_S3_steps=10,eps=0.1,max_expansion_steps=100,reset_size=500,max_data_size=1000)
+        self.opt = GoSafeSwarm([gp0,gp1], fmin=[-np.inf, 0], bounds=bounds, beta=3.0,x_0=x0.reshape(-1,1),eta=0.05,tol=0.0,max_S2_steps=15,max_S1_steps=85,max_S3_steps=10,eps=0.1,max_expansion_steps=100,reset_size=500,max_data_size=1000)
         self.opt.boundary_ratio=0.8
         self.opt.S3_x0_ratio=1
         self.opt.safety_cutoff=0.9

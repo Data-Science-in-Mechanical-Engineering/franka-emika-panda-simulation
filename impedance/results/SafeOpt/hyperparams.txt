@@ -1,20 +1,20 @@
 Hyperparams:
 
-beta=4
+beta=3
 
-lengthscale=0.65
+lengthscale=0.5
 
-kernel matern32
+kernel RBF
 
 noise_std=0.1
 iteraions=200
 
-max_size=400
-reset_size=200
+
 
 Results:
 safety 100%
-optimum 6*0.98873,3*0.01695
+optimum:
+[1.         0.14768434]
 
-time: mean 0.286
-      std: 0.05
+time: mean 0.27
+      std: 0.046
