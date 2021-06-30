@@ -57,6 +57,7 @@ class System(object):
             if opt is not None:
                 if opt.criterion in ["S2"]:
                     x0=params[opt.state_idx]
+                    x0=x0[:-1]
                     x0[3:]=np.zeros(3)
 
 
@@ -74,6 +75,9 @@ class System(object):
         self.reset(x0)
         state = []
         constraint2 = 0
+        init_dist = np.linalg.norm(self.env.goal - self.obs["achieved_goal"])
+        dist=init_dist-self.init_dist
+        dist=np.asarray(dist).reshape(1,-1)
         if x0 is not None:
             x=np.hstack([params[:2].reshape(1,-1),x0.reshape(1,-1)])
             state.append(x)
@@ -91,17 +95,17 @@ class System(object):
             if eigen_value>self.upper_eigenvalue and opt.criterion=="S3":
                 self.at_boundary=True
                 opt.s3_steps=np.maximum(0,opt.s3_steps-1)
-                return 0,0,0,state
+                return np.zeros(1),np.zeros(1),0,state
 
         elif eigen_value>self.upper_eigenvalue:
             self.at_boundary=True
             self.Fail=True
             print("Eigenvalues too high ",end="")
-            return 0,0,0,state
+            return np.zeros(1),np.zeros(1),np.zeros(1),state
 
 
         if render:
-            init_dist = np.linalg.norm(self.env.goal - self.obs["achieved_goal"])
+            #init_dist = np.linalg.norm(self.env.goal - self.obs["achieved_goal"])
             #init_dist=self.init_dist
             for i in range(self.T):
 
@@ -125,8 +129,10 @@ class System(object):
 
 
         else:
-            init_dist = np.linalg.norm(self.env.goal - self.obs["achieved_goal"])
+            #init_dist = np.linalg.norm(self.env.goal - self.obs["achieved_goal"])
             #init_dist = self.init_dist
+            constraint2=np.zeros(self.rollout_limit+1)
+            Objective=np.zeros(self.rollout_limit+1)
             for i in range(self.T):
                 if opt is not None and not self.at_boundary:
                     obs=self.obs["observation"].copy()
@@ -135,18 +141,20 @@ class System(object):
                     obs[3:]/=self.velocity_bound
                     #obs[3:]=opt.x_0[:,3:]
                     if i %10==0:
-                        self.at_boundary, self.Fail, params = opt.check_rollout(state=obs.reshape(1,-1), action=params)
+                        #x_check=np.hstack([])
+                        x_check=obs.reshape(1,-1)
+                        self.at_boundary, self.Fail, params = opt.check_rollout(state=x_check, action=params)
 
                     if self.Fail:
                         print("FAILED                  ",i,end=" ")
-                        return 0, 0,0,state
+                        return np.zeros(1), np.zeros(1),0,state
                     elif self.at_boundary:
                         params = params.squeeze()
                         print(" Changed action to",i,params,end="")
                         param_a = self.set_params(params.squeeze())
                         self.Q = np.diag(param_a)
 
-                        np.eye(3) / 100 * np.power(10, 3 * params[1])
+                        self.R=np.eye(3) / 100 * np.power(10, 3 * params[1])
                         P = np.matrix(scipy.linalg.solve_continuous_are(self.A, self.B, self.Q, self.R))
                         K = scipy.linalg.inv(self.R) * (self.B.T * P)
 
@@ -163,6 +171,8 @@ class System(object):
                     obs[3:] /= self.velocity_bound
                     x=np.hstack([params[:2].reshape(1,-1),obs.reshape(1,-1)])
                     state.append(x)
+                    constraint2[i]=0
+                    Objective[i]=0
                 bias = self.ID.g()
 
 
@@ -175,7 +185,7 @@ class System(object):
                 u = np.dot(self.N_bar, u)
                 self.obs, reward, done, info = self.env.step(u)
                 Objective+=reward
-                constraint2 = np.maximum(np.linalg.norm(self.env.goal - self.obs["achieved_goal"]) - init_dist,
+                constraint2 = np.maximum((np.linalg.norm(self.env.goal - self.obs["achieved_goal"]) - init_dist)*np.ones(self.rollout_limit+1),
                                          constraint2)
 
                 #constraint2 = np.maximum(np.max(np.abs(self.obs["observation"][3:])), constraint2)
@@ -189,7 +199,7 @@ class System(object):
 
     def reset(self,x0=None):
         self.obs = self.env.reset()
-        #self.init_dist = np.linalg.norm(self.env.goal - self.obs["achieved_goal"])
+        self.init_dist = np.linalg.norm(self.env.goal - self.obs["achieved_goal"])
         self.Fail=False
         self.at_boundary=False
 
@@ -322,7 +332,7 @@ class GoSafe_Optimizer(object):
         self.params = np.asarray([q,r])
         self.failures=0
         self.failure_overshoot = 0
-        self.rollout_limit = 500
+        self.rollout_limit = 250
         self.mean_reward = -0.33
         self.std_reward = 0.14
         self.eigen_value_std=21
@@ -337,11 +347,13 @@ class GoSafe_Optimizer(object):
         g1=-g1/self.upper_overshoot
         f -= self.mean_reward
         f /= self.std_reward
-        print(f, g1,g2)
-        f = np.asarray([[f]])
-        f = f.reshape(-1, 1)
-        g1 = np.asarray([[g1]])
-        g1 = g1.reshape(-1, 1)
+        print(f[0], g1[0],g2)
+        fscalar=f[0]
+        g1scalar=g1[0]
+        fscalar = np.asarray([[fscalar]])
+        fscalar = fscalar.reshape(-1, 1)
+        g1scalar = np.asarray([[g1scalar]])
+        g1scalar = g1scalar.reshape(-1, 1)
 
         #g2 = np.asarray([[g2]])
         #g2 = g2.reshape(-1, 1)
@@ -359,8 +371,8 @@ class GoSafe_Optimizer(object):
         KERNEL_f = GPy.kern.sde_RBF(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
         #KERNEL_g = GPy.kern.sde_Matern32(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
         KERNEL_g = GPy.kern.sde_RBF(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
-        gp0 = GPy.models.GPRegression(x[0,:].reshape(1,-1), f, noise_var=0.1 ** 2, kernel=KERNEL_f)
-        gp1 = GPy.models.GPRegression(x[0,:].reshape(1,-1), g1, noise_var=0.1 ** 2, kernel=KERNEL_g)
+        gp0 = GPy.models.GPRegression(x[0,:].reshape(1,-1), fscalar, noise_var=0.1 ** 2, kernel=KERNEL_f)
+        gp1 = GPy.models.GPRegression(x[0,:].reshape(1,-1), g1scalar, noise_var=0.1 ** 2, kernel=KERNEL_g)
         #gp2 = GPy.models.GPRegression(x[0, :].reshape(1, -1), g2, noise_var=0.01 ** 2, kernel=KERNEL_g)
 
 
@@ -371,7 +383,7 @@ class GoSafe_Optimizer(object):
                            [-0.5, 0.5],[-0.2, 0.2],[0.5, 1],[-1,1],[-1, 1],[-1, 1]]
 
 
-        self.opt = GoSafeSwarm([gp0,gp1], fmin=[-np.inf, 0], bounds=bounds, beta=3.0,x_0=x0.reshape(-1,1),eta=0.05,tol=0.0,max_S2_steps=15,max_S1_steps=85,max_S3_steps=10,eps=0.1,max_expansion_steps=100,reset_size=500,max_data_size=1000)
+        self.opt = GoSafeSwarm([gp0,gp1], fmin=[-np.inf, 0], bounds=bounds, beta=3.0,x_0=x0.reshape(-1,1),eta=0.06,tol=0.0,max_S2_steps=0,max_S1_steps=80,max_S3_steps=10,eps=0.1,max_expansion_steps=100,reset_size=500,max_data_size=1000)
         self.opt.boundary_ratio=0.8
         self.opt.S3_x0_ratio=1
         self.opt.safety_cutoff=0.9
@@ -395,7 +407,7 @@ class GoSafe_Optimizer(object):
             g1 = -g1/self.upper_overshoot
             f -= self.mean_reward
             f /= self.std_reward
-            print(f,g1,g2)
+            print(f[0],g1[0],g2)
             y = np.array([[f], [g1]])
             y = y.squeeze()
             self.add_data(state,y)
@@ -422,20 +434,20 @@ class GoSafe_Optimizer(object):
         y = y.squeeze()
         if not self.sys.at_boundary:
             self.add_data(state,y)
-            constraint_satisified = g1 >= 0
+            constraint_satisified = g1[0] >= 0
             if not constraint_satisified:
-                self.failure_overshoot+=-(g1*self.upper_overshoot)+self.upper_overshoot
+                self.failure_overshoot+=-(g1[0]*self.upper_overshoot)+self.upper_overshoot
                 logging.warning("Hit Constraint")
                 print(" Hit Constraint         ",end="")
             self.failures += constraint_satisified
-            print(f, g1,g2, self.opt.criterion, constraint_satisified)
+            print(f[0], g1[0],g2, self.opt.criterion, constraint_satisified)
         else:
             if not self.sys.Fail:
-                constraint_satisified = g1 >= 0
+                constraint_satisified = g1[0] >= 0
                 if not constraint_satisified:
-                    self.failure_overshoot += -(g1 * self.upper_overshoot) + self.upper_overshoot
+                    self.failure_overshoot += -(g1[0] * self.upper_overshoot) + self.upper_overshoot
                     logging.warning("Hit Constraint")
-                    print(" Hit Constraint         ",g1, end="")
+                    print(" Hit Constraint         ",g1[0], end="")
                 self.opt.add_boundary_points(param)
                 self.failures += constraint_satisified
             else:
@@ -456,14 +468,14 @@ class GoSafe_Optimizer(object):
         idx[0]=0
         for i in idx:
             x=state[i]
-            self.opt.add_new_data_point(x.reshape(1, -1), y)
+            self.opt.add_new_data_point(x.reshape(1, -1), y[:,i])
 
 
 #opt=SafeOpt_Optimizer()
 #method="SafeOpt"
 method="GoSafe"
 iterations=201
-runs=5
+runs=20
 plot=True
 if method=="GoSafe":
     Reward_data=np.zeros([41,runs])
@@ -474,6 +486,7 @@ if method=="GoSafe":
         random.seed(10+(runs-1-r))
         np.random.seed(10+(runs-1-r))
         opt.sys.env.seed((runs-1-r))
+        opt.opt._seed(10+(runs-1-r))
         if r>0:
             plot=False
         for i in range(iterations):
@@ -522,7 +535,7 @@ if method=="GoSafe":
                     plt.savefig('Safeset' + str(i) +'.png', dpi=300)
 
             update_boundary=False
-            if i%30==0:
+            if i%10==0:
                 update_boundary=True
             opt.optimize(update_boundary=update_boundary)
             print(i)

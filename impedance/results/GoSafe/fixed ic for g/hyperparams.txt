@@ -1,0 +1,38 @@
+Hyperparams:
+l_b=0.08
+beta=3.0
+eta=0.05
+tol=0.0
+eps=0.1
+s1_steps=85
+s2_steps=15
+s3_steps=10
+max_expansion_steps=100
+lengthscale=0.5,0.5
+S3 ratio=1
+#safety_cutoff: 0.9
+boundary ratio=0.8
+RBF
+Velocity and position length scales:0.35,0.3,0.35,2,2,2
+bounds = [[1/3, 1], [-1, 1],
+                           [-1, 1],[-1, 1],[0.5, 1],[-1,1],[-1, 1],[-1, 1]]
+noise_std=0.1
+iteraions=201
+
+max_size=1000
+reset_size=500
+
+Results:
+safety 98.7% (constraint violation on average 14.5% overshoot ->S2:3,S3:3, S1: 7
+optimums:
+
+1) [0.94739078 0.51819573]
+2)[0.86588751 0.35209107]
+3)[0.83357575 0.43187529]
+4)[ 0.60636884 -0.02884078]
+5)[ 0.494482   -0.03210106]
+
+
+time: mean 1.19
+      std: 1.15
+

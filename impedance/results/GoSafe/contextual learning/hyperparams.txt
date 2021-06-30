@@ -1,0 +1,36 @@
+Hyperparams:
+l_b=0.08
+beta=3.0
+eta=0.06
+tol=0.0
+eps=0.1
+s1_steps=80
+s2_steps=0 -> run S2 swarm every few iterations (every 10)
+s3_steps=10
+max_expansion_steps=100
+lengthscale=0.5,0.5
+S3 ratio=1
+rollout_limit=250 -> 50 are selected and added at random to the GP
+
+#safety_cutoff: 0.9
+boundary ratio=0.8
+RBF
+Velocity and position length scales:0.35,0.3,0.35,2,2,2
+bounds = [[1/3, 1], [-1, 1],
+                           [-1, 1],[-1, 1],[0.5, 1],[-1,1],[-1, 1],[-1, 1]]
+noise_std=0.1
+iteraions=201
+
+max_size=1000
+reset_size=500
+
+Results:
+seeds: 20
+safety 98.7% (constraint violation on average 9.68% overshoot ->S2:0,S3:7, S1:45 
+
+
+[1 0.56]
+
+time: mean  2.228311829306 
+      std: 1.6005453444999795
+
