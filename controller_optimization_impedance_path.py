@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
-from safeopt import GoSafeSwarm,SafeOptSwarm
+from safeopt import GoSafeSwarm,SafeOptSwarm,GoSafeSwarm_Contextual
 import gym
 import Panda_Env #Library defined for the panda environment
 import mujoco_py
@@ -11,6 +11,7 @@ import GPy
 import random
 import time
 import logging
+import pandas as pd
 class System(object):
 
     def __init__(self,position_bound,velocity_bound,rollout_limit=0,upper_eigenvalue=0):
@@ -39,6 +40,7 @@ class System(object):
         self.rho_min=1/500
         self.kappa_max=1
         self.kappa_min=0
+        self.boundary_frequency=1
         T1 = np.zeros(9)
         T1[4] = 1
         T1[6:] = 1
@@ -95,7 +97,7 @@ class System(object):
         Objective = np.zeros(self.rollout_limit + 1)
         for i in range(self.T):
             if opt is not None and not self.at_boundary:
-                if i % 10 == 0:
+                if i % self.boundary_frequency == 0:
                     obs=self.obs["observation"].copy()
                     obs[:3]/=self.position_bound
                     obs[3:]/=self.velocity_bound
@@ -108,7 +110,7 @@ class System(object):
                     return 0, 0,0,state
                 elif self.at_boundary:
                     params = params.squeeze()
-                    print(" Changed action to",i,params,end="")
+                    print(" Changed action to",i,params,'constraint',constraint2[0], end="")
                     param_a = self.set_params(params.squeeze())
                     self.Q = np.diag(param_a)
                     self.R=np.eye(3) / 100 * np.power(10, 3 * params[2])
@@ -297,6 +299,7 @@ class GoSafe_Optimizer(object):
         self.position_bound = 0.3
         self.velocity_bound = 5
         self.sys = System(rollout_limit=self.rollout_limit,position_bound=self.position_bound,velocity_bound=self.velocity_bound)
+        self.sys.boundary_frequency=10
         f, g1, state = self.sys.simulate(self.params,update=True)
 
         g1-=self.error_bound
@@ -337,20 +340,29 @@ class GoSafe_Optimizer(object):
 
 
 
-        bounds = [[1/3, 1], [0,1],[-1, 1],[0,1],
-                           [-0.1, 0.1],[-0.1, 0.1],[0.1, 0.1],[-0.1,0.1],[-0.1, 0.1],[-0.1, 0.1],[0.1, 0.2]]
+        #bounds = [[1/3, 1], [0,1],[-1, 1],[0,1],
+        #                   [-0.1, 0.1],[-0.1, 0.1],[-0.1, 0.1],[-0.1,0.1],[-0.1, 0.1],[-0.1, 0.1],[0.0, 0.2]]
+
+        # Try out larger bounds
+        bounds = [[1 / 3, 1], [0, 1], [-1, 1], [0, 1],
+                  [-0.1, 0.1], [-0.1, 0.1], [-0.1, 0.1], [-1, 1], [-1, 0.1], [-1, 1], [0, 1]]
 
 
         self.opt = GoSafeSwarm([gp0,gp1], fmin=[-np.inf, 0], bounds=bounds, beta=3.0,x_0=x0.reshape(-1,1),eta=0.05,tol=0.0,max_S2_steps=0,max_S1_steps=30,max_S3_steps=10,eps=0.1,max_expansion_steps=100,reset_size=500,max_data_size=1000)
         self.opt.boundary_ratio=0.8
         self.opt.S3_x0_ratio=1
         self.opt.safety_cutoff=0.9
+        self.opt.encourage_jumps=False
         y = np.array([f, g1])
         y=y.squeeze()
         self.add_data(x,y)
         #for i in range(1,self.rollout_limit):
          #   self.opt.add_new_data_point(x[i].reshape(1,-1),y)
         self.time_recorded = []
+        self.df = pd.DataFrame(
+            np.array([[self.params[0], self.params[1], self.params[2], self.params[3], self.opt.criterion, f[0], g1[0],
+                       f[0], False]]),
+            columns=['q', 'kappa', 'r', 'a_rho', 'criterion', 'fval', 'gval', 'fmax', 'Boundary'])
         self.simulate_data()
     def simulate_data(self):
         p = [5/6,1]
@@ -369,6 +381,12 @@ class GoSafe_Optimizer(object):
             y = y.squeeze()
             self.add_data(state,y)
             #self.opt.add_new_data_point(x, y)
+            max, fmax = self.opt.get_maximum()
+            df2 = pd.DataFrame(
+                np.array([[self.params[0], self.params[1], self.params[2], self.params[3], self.opt.criterion, f[0],
+                           g1[0], fmax[0], self.sys.at_boundary]]),
+                columns=['q', 'kappa', 'r', 'a_rho', 'criterion', 'fval', 'gval', 'fmax', 'Boundary'])
+            self.df = self.df.append(df2)
 
 
     def optimize(self,update_boundary=False):
@@ -384,7 +402,12 @@ class GoSafe_Optimizer(object):
         g1 = -g1/self.error_bound
         f -= self.mean_reward
         f /= self.std_reward
-
+        max, fmax = opt.opt.get_maximum()
+        df2 = pd.DataFrame(
+            np.array([[param[0], param[1], param[2], param[3], self.opt.criterion, f[0],
+                       g1[0], fmax[0], self.sys.at_boundary]]),
+            columns=['q', 'kappa', 'r', 'a_rho', 'criterion', 'fval', 'gval', 'fmax', 'Boundary'])
+        self.df = self.df.append(df2)
         y = np.array([[f], [g1]])
         y = y.squeeze()
         if not self.sys.at_boundary:
@@ -427,19 +450,208 @@ class GoSafe_Optimizer(object):
             x=state[i]
             self.opt.add_new_data_point(x.reshape(1, -1), y[:,i])
 
+class GoSafeContextual_Optimizer(object):
+
+    def __init__(self, error_bound=0.25, lengthscale=0.5, ARD=True):
+        self.error_bound=error_bound
+        q =4/6
+        r = -1
+        kappa=0.1
+        rho_action=0
+        self.params = np.asarray([q,kappa,r,rho_action])
+        self.failures=0
+        self.failure_overshoot = 0
+        self.rollout_limit = 600
+        self.mean_reward = -0.3
+        self.std_reward = 0.1
+
+        self.position_bound = 0.3
+        self.velocity_bound = 5
+        self.sys = System(rollout_limit=self.rollout_limit,position_bound=self.position_bound,velocity_bound=self.velocity_bound)
+        f, g1, state = self.sys.simulate(self.params,update=True)
+
+        g1-=self.error_bound
+        g1=-g1/self.error_bound
+        f -= self.mean_reward
+        f /= self.std_reward
+        print(f[0], g1[0])
+        fscalar = f[0]
+        g1scalar = g1[0]
+        fscalar = np.asarray([[fscalar]])
+        fscalar = fscalar.reshape(-1, 1)
+        g1scalar = np.asarray([[g1scalar]])
+        g1scalar = g1scalar.reshape(-1, 1)
+
+
+        #g2 = np.asarray([[g2]])
+        #g2 = g2.reshape(-1, 1)
+
+
+        x0=state[0][:,4:]
+
+
+        x=np.asarray(state).squeeze()
+
+        L = [lengthscale / 6, 0.2, lengthscale / 3, 0.2, 0.5 / self.position_bound, 0.5 / self.position_bound,
+             0.5 / self.position_bound,
+             0.6, 0.6, 0.6, 0.5]
+
+        L_states = np.asarray(L[4:])
+        #L = [lengthscale / 6, lengthscale / 3, 0.6, 0.5, 0.8, 24 / 7, 24 / 7, 24 / 7]
+        #KERNEL_f = GPy.kern.sde_Matern32(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
+        KERNEL_f = GPy.kern.sde_RBF(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
+        #KERNEL_f = GPy.kern.sde_Matern52(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
+        #KERNEL_g = GPy.kern.sde_Matern32(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
+        KERNEL_g = GPy.kern.sde_RBF(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
+        #KERNEL_g = GPy.kern.sde_Matern52(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
+        gp_full0 = GPy.models.GPRegression(x[0,:].reshape(1,-1), fscalar, noise_var=0.1 ** 2, kernel=KERNEL_f)
+        gp_full1 = GPy.models.GPRegression(x[0,:].reshape(1,-1), g1scalar, noise_var=0.1 ** 2, kernel=KERNEL_g)
+        #gp2 = GPy.models.GPRegression(x[0, :].reshape(1, -1), g2, noise_var=0.01 ** 2, kernel=KERNEL_g)
+
+
+
+
+
+        #bounds = [[1/3, 1], [0,1],[-1, 1],[0,1],
+        #                   [-0.1, 0.1],[-0.1, 0.1],[-0.1, 0.1],[-0.1,0.1],[-0.1, 0.1],[-0.1, 0.1],[0.0, 0.2]]
+
+        # Try out larger bounds
+        bounds = [[1 / 3, 1], [0, 1], [-1, 1], [0, 1]]
+
+        a = x[:, :4]
+        L = [lengthscale/6,0.2,lengthscale/3,0.2]
+        KERNEL_f = GPy.kern.sde_RBF(input_dim=a.shape[1], lengthscale=L, ARD=ARD, variance=1)
+        KERNEL_g = GPy.kern.sde_RBF(input_dim=a.shape[1], lengthscale=L, ARD=ARD, variance=1)
+        gp0 = GPy.models.GPRegression(a[0, :].reshape(1, -1), fscalar, noise_var=0.1 ** 2, kernel=KERNEL_f)
+        gp1 = GPy.models.GPRegression(a[0, :].reshape(1, -1), g1scalar, noise_var=0.1 ** 2, kernel=KERNEL_g)
+
+        self.opt = GoSafeSwarm_Contextual(gp=[gp0, gp1], gp_full=[gp_full0, gp_full1], bounds=bounds,beta=3.0,
+                                          fmin=[-np.inf, 0], x_0=x0.reshape(-1, 1), L_states=L_states, eta_L=0.25,eta_u=0.5,
+                                          max_S1_steps=50,
+                                          max_S3_steps=10, eps=0.1, max_data_size=1000, reset_size=500,
+                                          boundary_thresshold_l=0.88,boundary_thresshold_u=0.92)
+        #self.encourage_jumps = False
+        #self.opt.return_best_f_action=False
+        #self.opt = GoSafeSwarm([gp0,gp1], fmin=[-np.inf, 0], bounds=bounds, beta=3.0,x_0=x0.reshape(-1,1),eta=0.05,tol=0.0,max_S2_steps=0,max_S1_steps=30,max_S3_steps=10,eps=0.1,max_expansion_steps=100,reset_size=500,max_data_size=1000)
+        #self.opt.boundary_ratio=0.8
+        #self.opt.S3_x0_ratio=1
+        #self.opt.safety_cutoff=0.9
+        y = np.array([f, g1])
+        y=y.squeeze()
+        self.add_data(x,y)
+        #for i in range(1,self.rollout_limit):
+         #   self.opt.add_new_data_point(x[i].reshape(1,-1),y)
+        self.time_recorded = []
+        self.df = pd.DataFrame(
+            np.array([[self.params[0], self.params[1],self.params[2],self.params[3] ,self.opt.criterion, f[0], g1[0], f[0], False]]),
+            columns=['q','kappa' ,'r','a_rho' ,'criterion', 'fval', 'gval', 'fmax', 'Boundary'])
+        self.simulate_data()
+    def simulate_data(self):
+        p = [5/6,1]
+        d = [-0.9,-2/3]
+        kappa = 0.5
+        rho_action = 1
+        for i in range(2):
+            self.params = np.asarray([p[i],kappa,d[i],rho_action])
+            f, g1,state = self.sys.simulate(self.params,update=True,opt=self.opt)
+            g1 -= self.error_bound
+            g1 = -g1/self.error_bound
+            f -= self.mean_reward
+            f /= self.std_reward
+            print(f[0],g1[0])
+            y = np.array([[f], [g1]])
+            y = y.squeeze()
+            self.add_data(state,y)
+            df2= pd.DataFrame(
+                np.array([[self.params[0], self.params[1], self.params[2], self.params[3], self.opt.criterion, f[0],
+                           g1[0], f[0], self.sys.at_boundary]]),
+                columns=['q', 'kappa', 'r', 'a_rho', 'criterion', 'fval', 'gval', 'fmax', 'Boundary'])
+            self.df = self.df.append(df2)
+            #self.opt.add_new_data_point(x, y)
+
+
+    def optimize(self,update_boundary=False):
+        if update_boundary:
+            self.opt.update_boundary_points()
+        start_time = time.time()
+        param = self.opt.optimize()
+        self.time_recorded.append(time.time() - start_time)
+        print(param, end="")
+        f, g1,state = self.sys.simulate(param,update=True,opt=self.opt)
+        #print(f, g1, g2,self.opt.criterion)
+        g1 -= self.error_bound
+        g1 = -g1/self.error_bound
+        f -= self.mean_reward
+        f /= self.std_reward
+        df2 = pd.DataFrame(
+            np.array([[param[0], param[1], param[2], param[3], self.opt.criterion, f[0],
+                       g1[0], f[0], self.sys.at_boundary]]),
+            columns=['q', 'kappa', 'r', 'a_rho', 'criterion', 'fval', 'gval', 'fmax', 'Boundary'])
+        self.df = self.df.append(df2)
+        y = np.array([[f], [g1]])
+        y = y.squeeze()
+        if not self.sys.at_boundary:
+            self.add_data(state,y)
+            constraint_satisified = g1[0] >= 0
+            if not constraint_satisified:
+                self.failure_overshoot+=-(g1[0]*self.error_bound)+self.error_bound
+                logging.warning("Hit Constraint")
+                print(" Hit Constraint         ",end="")
+            self.failures += constraint_satisified
+            print(f[0], g1[0], self.opt.criterion, constraint_satisified)
+        else:
+            if not self.sys.Fail:
+                constraint_satisified = g1[0] >= 0
+                if not constraint_satisified:
+                    self.failure_overshoot += -(g1[0] * self.error_bound) + self.error_bound
+                    logging.warning("Hit Constraint")
+                    print(" Hit Constraint         ",g1[0], end="")
+                self.opt.add_boundary_points(param)
+                self.failures += constraint_satisified
+            else:
+                constraint_satisified=g1[0]>=0
+                if not constraint_satisified:
+                    logging.warning("Failed")
+
+
+            print(self.opt.criterion,constraint_satisified)
+
+
+
+    def add_data(self,state,y):
+        state = np.asarray(state).squeeze()
+        size = min(50, state.shape[0])
+        idx = np.zeros(size + 1, dtype=int)
+        idx[1:] = np.random.randint(low=1, high=len(state), size=size)
+        idx[0] = 0
+        state[0][self.opt.state_idx] = self.opt.x_0.squeeze().copy()
+        x = state[idx]
+        y = y[:, idx].T
+        self.opt.add_data(x, y)
+
+
+
+
+
+
+
 
 #opt=SafeOpt_Optimizer()
 #method="SafeOpt"
 method="GoSafe"
+contextual=True
 iterations=201
-runs=5
+runs=10
 plot=False
 if method=="GoSafe":
     Reward_data=np.zeros([41,runs])
     Overshoot_summary=np.zeros([2,runs])
     for r in range(runs):
         j=0
-        opt = GoSafe_Optimizer()
+        if contextual:
+            opt=GoSafeContextual_Optimizer()
+        else:
+            opt = GoSafe_Optimizer()
         random.seed(r+10)
         np.random.seed(r+10)
         opt.sys.env.seed(r+10)
@@ -463,6 +675,7 @@ if method=="GoSafe":
         print(opt.failure_overshoot/(failure),r)
         max, f = opt.opt.get_maximum()
         print(max,f)
+        opt.df.to_csv("Optimizer_queryPoints_path" + str(r) + ".csv")
 
     np.savetxt('GoSafe_error.csv', Overshoot_summary, delimiter=',')
     np.savetxt('GoSafe_Reward.csv', Reward_data, delimiter=',')
