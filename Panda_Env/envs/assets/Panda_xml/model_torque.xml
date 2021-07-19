@@ -85,15 +85,15 @@
     
     <actuator>
         
-          <motor name="TorqueJ1" ctrllimited="true" ctrlrange="-87 87" joint="panda_joint1" gear="20"/>
-          <motor name="TorqueJ2" ctrllimited="true" ctrlrange="-87 87" joint="panda_joint2" gear="20"/>
-          <motor name="TorqueJ3" ctrllimited="true" ctrlrange="-87 87" joint="panda_joint3" gear="20"/>
-          <motor name="TorqueJ4" ctrllimited="true" ctrlrange="-87 87" joint="panda_joint4" gear="20"/>
-          <motor name="TorqueJ5" ctrllimited="true" ctrlrange="-12 12" joint="panda_joint5" gear="10"/>
-          <motor name="TorqueJ6" ctrllimited="true" ctrlrange="-12 12" joint="panda_joint6" gear="10"/>
-          <motor name="TorqueJ7" ctrllimited="true" ctrlrange="-12 12" joint="panda_joint7" gear="10"/>
-          <motor name="TorqueG1" ctrllimited="true" ctrlrange="-70 70" joint="panda_finger_joint1" gear="20"/>
-          <motor name="TorqueG2" ctrllimited="true" ctrlrange="-70 70" joint="panda_finger_joint2" gear="20"/>
+          <motor name="TorqueJ1" ctrllimited="true" ctrlrange="-87 87" joint="panda_joint1" gear="30"/>
+          <motor name="TorqueJ2" ctrllimited="true" ctrlrange="-87 87" joint="panda_joint2" gear="30"/>
+          <motor name="TorqueJ3" ctrllimited="true" ctrlrange="-87 87" joint="panda_joint3" gear="30"/>
+          <motor name="TorqueJ4" ctrllimited="true" ctrlrange="-87 87" joint="panda_joint4" gear="30"/>
+          <motor name="TorqueJ5" ctrllimited="true" ctrlrange="-12 12" joint="panda_joint5" gear="15"/>
+          <motor name="TorqueJ6" ctrllimited="true" ctrlrange="-12 12" joint="panda_joint6" gear="15"/>
+          <motor name="TorqueJ7" ctrllimited="true" ctrlrange="-12 12" joint="panda_joint7" gear="15"/>
+          <motor name="TorqueG1" ctrllimited="true" ctrlrange="-70 70" joint="panda_finger_joint1" gear="30"/>
+          <motor name="TorqueG2" ctrllimited="true" ctrlrange="-70 70" joint="panda_finger_joint2" gear="30"/>
       </actuator>
     
     <sensor>
