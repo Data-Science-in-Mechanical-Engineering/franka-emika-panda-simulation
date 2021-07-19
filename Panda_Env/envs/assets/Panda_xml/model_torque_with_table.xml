@@ -14,6 +14,7 @@
         <mesh name="finger" file="finger.stl" />
         <material name="block_mat" specular="0" shininess="0.5" reflectance="0" rgba="0.2 0.2 0.2 1"></material>
         <material name="floor_mat" specular="0" shininess="0.5" reflectance="0" rgba="0.2 0.2 0.2 1"></material>
+        <material name="table_mat" specular="0" shininess="0.5" reflectance="0" rgba="0.93 0.93 0.93 1"></material>
     </asset>
     <worldbody>
         <light cutoff="100" diffuse="1 1 1" dir="-0 0 -1.3" directional="true" exponent="1" pos="0 0 1.3" specular=".1 .1 .1"/>
@@ -79,7 +80,15 @@
                 <geom conaffinity="0" contype="0" pos="0 0 0" rgba="0 0.5 0 0.1" size="0.005 1 0.001" type="box"></geom>
                 <geom conaffinity="0" contype="0" pos="0 0 0" rgba="0 0.5 0 0.1" size="0.005 0.005 1" type="box"></geom>
             </body>
-                
+            
+            
+            <body pos="0.65 0.6 0.0" name="table0">
+                <site name="table0" pos="0 0 0.5" size="0.02 0.02 0.5" rgba="0 0 1 1" type="box"></site>
+            </body>
+            
+            <body pos="0.65 0.9 0.0" name="table1">
+                        <site name="table1" pos="0 0 0.5" size="0.02 0.02 0.5" rgba="0 0 1 1" type="box"></site>
+            </body>
     </worldbody>
     
     
