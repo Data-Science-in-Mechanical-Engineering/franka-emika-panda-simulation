@@ -35,7 +35,7 @@ B[3:,:]=np.eye(3)
 
 #Ad=np.eye(joints*2)+A*Ts
 controller_class = ["impedance", "gravity_compensation", "inverse_dynamics_task_space", "inverse_dynamics_joint_space"]
-controller = controller_class[2]
+controller = controller_class[0]
 
 
 Nsteps=25
@@ -52,9 +52,9 @@ Full_data=np.zeros([Nsteps ** 2, 10])
 runs=1
 Full_data[:,:2]=q_vals
 for r in range(runs):
-    env.seed(r)
-    random.seed(r)
-    np.random.seed(r)
+    env.seed(r+5)
+    random.seed(r+5)
+    np.random.seed(r+5)
     data = np.zeros(Full_data.shape)
     data[:, :2] = q_vals
     for j in range(int(Nsteps**2)):
@@ -116,8 +116,8 @@ for r in range(runs):
 
             if weighted:
                 T1 = np.zeros(9)
-                T1[4:] = 1
-                #T1[6:] = 1
+                T1[4] = 1
+                T1[6:] = 1
                 T = np.diag(T1)
                 N = np.eye(9) - np.dot(np.linalg.pinv(T, rcond=1e-4), T)
                 N_bar = np.dot(N, np.linalg.pinv(np.dot(np.eye(9), N), rcond=1e-4))
@@ -154,6 +154,7 @@ for r in range(runs):
         #    print("reached target")
         #    env.reset()
         data[j,6]*=1/num_steps
+
         data[j, 5] = data[j, 5] / init_dist
         #data[j, 3] = np.linalg.norm(obs["desired_goal"] - obs["achieved_goal"])
 
@@ -162,4 +163,4 @@ for r in range(runs):
     Full_data[:,2:]+=data[:,2:]
 
 Full_data[:,2:]=Full_data[:,2:]/runs
-np.savetxt('arm_cost_approximate_inputs.csv', Full_data, delimiter=',')
+np.savetxt('arm_cost_impedance_inputs2.csv', Full_data, delimiter=',')
