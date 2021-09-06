@@ -1,0 +1,16 @@
+parameters
+lengthscale=0.7
+L = [lengthscale / 6, lengthscale / 6, 0.28, 0.28, 0.28, 2.2, 2.2, 2.2]
+self.opt = GoSafeSwarm_Contextual(gp=[gp0, gp1], gp_full=[gp_full0, gp_full1], bounds=bounds, beta=4.5,
+                                          fmin=[-np.inf, 0], x_0=x0.reshape(-1, 1), L_states=L_states, eta_L=0.4,
+                                          eta_u=0.6, max_S1_steps=30,
+                                          max_S3_steps=10, eps=0.1, max_data_size=1000, reset_size=500,
+                                          boundary_thresshold_l=0.90, boundary_thresshold_u=0.94)
+        
+
+data colelcted=500 per experiment
+
+
+
+S3 violations: 0 
+S1 violations: 1

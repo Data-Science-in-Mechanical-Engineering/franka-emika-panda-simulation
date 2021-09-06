@@ -1,0 +1,13 @@
+
+L = [0.5 / 6, 0.2, 0.5 / 3, 0.2, 0.5 / self.position_bound, 0.5 / self.position_bound,
+             0.5 / self.position_bound,
+             0.6, 0.6, 0.6, 10]
+
+self.opt = GoSafeSwarm_Contextual(gp=[gp0, gp1], gp_full=[gp_full0, gp_full1], bounds=bounds,beta=3,
+                                          fmin=[-np.inf, 0], x_0=x0.reshape(-1, 1), L_states=L_states, eta_L=0.3,eta_u=0.75,
+                                          max_S1_steps=100,
+                                          max_S3_steps=10, eps=0.1, max_data_size=1000, reset_size=500,
+                                          boundary_thresshold_l=0.91,boundary_thresshold_u=0.95)
+
+
+100 % safety
