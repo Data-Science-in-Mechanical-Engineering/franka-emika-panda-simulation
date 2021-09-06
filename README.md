@@ -1,4 +1,6 @@
-# PandaRobot
+# PandaRobot and Simulation Results
+
+## Panda Robot
 
 XML file generated from the URDF and meshes (link: https://github.com/StanfordASL/PandaRobot.jl)
 
@@ -21,5 +23,13 @@ Furthermore, a simple gym environment has also been implemented where the action
 Installation: ```pip install -e .```
 
 Testing:
-``` test_env.py ``` can be run to visualize a simple gravity compensation controller.
+``` test_env.py ``` can be run to visualize a simple impedance controller.
 
+
+## Simulation tasks
+We consider 2 tasks:
+
+1. Eight dimensional: Reaching a desired positive task
+2. Path following task.
+
+To run SafeOpt and Contextual GoSafe code is required.
