@@ -109,7 +109,7 @@ contraint_3=0
 constraint_4=0
 constraint_5=0
 
-num_steps=5000
+num_steps=2000
 states=np.zeros([6,num_steps])
 eigen_value=np.linalg.eig(A-np.dot(B,K))
 eigen_value=np.max(np.asarray(eigen_value[0]).real)
