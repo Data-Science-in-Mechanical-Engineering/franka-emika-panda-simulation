@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 from safeopt import linearly_spaced_combinations
-from safeopt import GoSafeSwarm,SafeOptSwarm,SafeOpt
+from safeopt import SafeOptSwarm,SafeOpt
 import gym
 import Panda_Env #Library defined for the panda environment
 import mujoco_py
