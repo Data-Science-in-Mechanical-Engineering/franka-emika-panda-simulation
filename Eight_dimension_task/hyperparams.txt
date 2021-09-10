@@ -1,0 +1,28 @@
+Hyper Parameters
+
+
+SafeOpt:
+	Lengthscales a: 0.7/6, 0.7/6
+	beta: 4
+	noise_var=0.1**2
+	
+
+GoSafe Contextual:
+	Lengthscales a: 0.7/6, 0.7/6,
+	beta: 4
+	noise_var=0.1**2
+	Lengthscales x:  0.3,0.3,2.5,2.5,2.5
+	eta_L=0.4, eta_u=0.6
+	boundary_thresshold_l=0.9, boundary_thresshold_l=0.94
+	max_S1_steps=30, max_s3_steps=10
+	max_data_size=1000, reset_size=500
+
+GoSafe Pessimistic:
+	Lengthscales a: 0.7/6, 0.7/6,
+	beta: 4.0
+	noise_var=0.1**2
+	Lengthscales x:  0.28,0.28,2.2,2.2,2.2
+	eta_L=0.4, eta_u=0.6
+	boundary_thresshold_l=0.9, boundary_thresshold_l=0.94
+	max_S1_steps=30, max_s3_steps=10
+	max_data_size=1000, reset_size=500
