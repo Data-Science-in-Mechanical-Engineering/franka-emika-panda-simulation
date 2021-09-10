@@ -11,7 +11,7 @@ GoSafe Contextual:
 	Lengthscales a: 0.5/6, 0.2, 0.5/3, 0.2
 	beta: 3
 	noise_var=0.1**2
-	Lengthscales x: 0.5/6,0.2,0.5/3,0.2, 0.5/0.3, 0.5/0.3, 0.6,0.6,0.6,10
+	Lengthscales x: 0.5/0.3, 0.5/0.3,0.5/0.3, 0.6,0.6,0.6,10
 	eta_L=0.3, eta_u=0.75
 	boundary_thresshold_l=0.9, boundary_thresshold_l=0.94
 	max_S1_steps=100, max_s3_steps=10
