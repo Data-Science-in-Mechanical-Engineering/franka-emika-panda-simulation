@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import matplotlib
-from safeopt import GoSafeSwarm, SafeOptSwarm, GoSafeSwarm_Contextual
+from safeopt import SafeOptSwarm, GoSafeSwarm_Contextual
 import gym
 import Panda_Env  # Library defined for the panda environment
 import mujoco_py
