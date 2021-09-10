@@ -1,3 +1,5 @@
+# Needs GoSafeSwarm from gosafe (extensions branch)
+
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
