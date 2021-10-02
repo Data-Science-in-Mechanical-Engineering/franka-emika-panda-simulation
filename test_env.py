@@ -16,7 +16,9 @@ def _Mx(M,J):
     Mx=np.linalg.pinv(Mx_inv,rcond=1e-4)
     return Mx,Mx_inv
 
-
+'''
+Loads Panda environment and compares optimum found by safeopt (region1) and our method (region 2)
+'''
 
 env=gym.make("PandaEnv-v0")
 
@@ -39,23 +41,11 @@ B[3:,:]=np.eye(3)
 
 #Ts=1/1000
 region=2 #region=2 gosafe maximum
-#Ad=np.eye(joints*2)+A*Ts
 
-#qr_region_1=2.526
-#qd_region_1=1.263
-
-
-
-#q_2=6.15784
-#r_2=9.47
 q_2=6*1
 r_2=np.power(10.,3*0.56)
 
 
-
-
-#q_1 = 6*0.98873
-#r_1 = np.power(10.,3*0.01695)
 q_1=6
 r_1 = np.power(10.,3*0.14768434)
 
@@ -77,15 +67,8 @@ approximate=True
 P=np.matrix(scipy.linalg.solve_continuous_are(A,B,Q,R))
 K = scipy.linalg.inv(R)*(B.T*P)
 
-#Kp[2,2]=Kp[2,2]*1.5
-
 K=np.asarray(K)
 
-#Kp=np.eye(3)*300 #Check out impedance controller: [100,800,1000] , inverse dynamics controller [200 500 1000]
-#Kp[0,0]=Kp[0,0]
-#Kp[1,1]=Kp[1,1]
-#Kp[2,2]=Kp[2,2]
-#Kd=np.sqrt(Kp)*2
 
 Kp=K[:,:3]
 Kd=K[:,3:]
@@ -93,6 +76,7 @@ Kd=K[:,3:]
 controller_class=["impedance","gravity_compensation", "inverse_dynamics_task_space","inverse_dynamics_joint_space"]
 controller = controller_class[0]
 
+# Sets torques 4, 6,7 equal to 0
 weighted=True
 
 
@@ -124,11 +108,7 @@ for i in range(num_steps):
     bias = ID.g()
     M = ID.M()
 
-    # data[j, 2] = np.maximum(data[j,2],np.linalg.norm(obs["desired_goal"] - obs["achieved_goal"])/init_dist)
-
     id = env.sim.model.site_name2id("panda:grip")
-    # J=env.sim.data.site_jacp[id,:]
-    # J=J.reshape(3,-1)
     J = ID.Jp(id)
     u = -bias
     Mx, Mx_inv = ID.Mx(M, J)
@@ -146,13 +126,10 @@ for i in range(num_steps):
             u += np.dot(J.T, np.dot(approx_M, wM_des))
         else:
             u += np.dot(J.T, np.dot(Mx, wM_des))
-    # elif controller==controller_class[3]:
-    #    x=np.hstack((env.sim.data.qpos,env.sim.data.qvel))
-    #    x[:joints]=x[:joints]-q_des
 
-    #    u+=np.dot(M,np.dot(-K,x))
 
     if weighted:
+        # Set torques 4,6,7,.. to 0
         T1 = np.zeros(9)
         T1[4] = 1
         T1[6:] = 1
@@ -164,17 +141,15 @@ for i in range(num_steps):
         torque = u
 
 
-    # torque=np.clip(torque,env.action_space.low,env.action_space.high)
-    #noise=np.maximum(np.random.normal(size=9)*torque,0.1*np.ones(9))
     obs, reward, done, info = env.step(torque)
     env.render()
     Total_reward += reward
     dist_factor = np.linalg.norm(env.goal - obs["achieved_goal"]) / init_dist
     dist_con = (1 + np.exp(-dist_factor)) / 2
     vel_con = (1 + np.exp(-0.5*np.tanh(np.linalg.norm(obs["observation"][3:])))) / 2
-    # data[j,2]=np.linalg.norm(obs["desired_goal"]-obs["achieved_goal"])/init_dist
+
     constraint_1 = np.maximum(vel_con * dist_con, constraint_1)
-    # print(np.hstack((env.sim.data.qpos[4], env.sim.data.qpos[6:])))
+
 
     constraint_2 = np.maximum(np.linalg.norm(env.goal - obs["achieved_goal"]) - init_dist, constraint_2)
     input_bounds=(np.abs(torque) - env.action_space.high)/env.action_space.high
@@ -182,15 +157,12 @@ for i in range(num_steps):
     contraint_3=np.maximum(contraint_3,input_bounds)
 
     constraint_4 = np.maximum(np.max(np.abs(obs["observation"][3:])),constraint_4)
-# if info["is_success"]:
-#    print("reached target")
-#    env.reset()
+
 Total_reward *= 1 / num_steps
 constraint_2/=init_dist
-# data[j, 3] = np.linalg.norm(obs["desired_goal"] - obs["achieved_goal"])
 
-#print((obs["desired_goal"] - obs["achieved_goal"]))
 
+# Plot state evoluation
 fig, axs = plt.subplots(6, sharex=True,figsize=(12, 9.6))
 fig.suptitle("State Evolution GoSafe")
 ylabel=['$r_{e,x}$','$r_{e,y}$','$r_{e,z}$','$v_{e,x}$','$v_{e,y}$','$v_{e,z}$']
@@ -206,5 +178,4 @@ fig.show()
 fig.align_ylabels(axs)
 fig.savefig("GoSafeStates.png",dpi=300)
 print(contraint_3,constraint_2,constraint_4)
-#print((obs["desired_goal"]-obs["achieved_goal"]),constraint_1,constraint_2,contraint_3,Total_reward)
 

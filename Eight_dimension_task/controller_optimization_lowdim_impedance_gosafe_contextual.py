@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import matplotlib
-from safeopt import SafeOptSwarm, GoSafeSwarm_Contextual
+from safeopt import SafeOptSwarm, Contextual_GoSafe
 import gym
 import Panda_Env  # Library defined for the panda environment
 import mujoco_py
@@ -19,6 +19,7 @@ class System(object):
     def __init__(self, position_bound, velocity_bound, rollout_limit=0, upper_eigenvalue=0):
         self.env = gym.make("PandaEnv-v0")
         self.low_eigen_value = False
+        # Define Q,R, A, B, C matrices
         self.Q = np.eye(6)
         self.R = np.eye(3) / 100
         self.env.seed(0)
@@ -29,6 +30,7 @@ class System(object):
         self.B = np.zeros([6, 3])
         self.B[3:, :] = np.eye(3)
         self.T = 2000
+        # Set up inverse dynmaics controller
         self.ID = inverse_dynamics_control(env=self.env, njoints=9, target=self.env.goal)
         self.id = self.env.sim.model.site_name2id("panda:grip")
         self.rollout_limit = rollout_limit
@@ -38,6 +40,7 @@ class System(object):
         self.position_bound = position_bound
         self.velocity_bound = velocity_bound
         self.upper_eigenvalue = upper_eigenvalue
+        # Define weighting matrix to set torques 4,6,7,.. (not required for movement) to 0.
         T1 = np.zeros(9)
         T1[4] = 1
         T1[6:] = 1
@@ -46,7 +49,9 @@ class System(object):
         self.N_bar = np.dot(N, np.linalg.pinv(np.dot(np.eye(9), N), rcond=1e-4))
 
     def simulate(self, params=None, render=False, opt=None, update=False):
+        # Simulate the robot/run experiments
         x0 = None
+        # Update parameters
         if params is not None:
 
             if update:
@@ -58,11 +63,13 @@ class System(object):
             self.R = np.eye(3) / 100 * np.power(10, 3 * params[1])  # param is between -1 and 1
 
             if opt is not None:
+                # Update initial condition if running GoSafe
                 if opt.criterion in ["S2"]:
                     x0 = params[opt.state_idx]
                     x0 = x0[:-1]
                     x0[3:] = np.zeros(3)
-
+                    
+        # Get controller
         P = np.matrix(scipy.linalg.solve_continuous_are(self.A, self.B, self.Q, self.R))
         K = scipy.linalg.inv(self.R) * (self.B.T * P)
 
@@ -131,6 +138,7 @@ class System(object):
 
 
         else:
+            # Simulate the arm
             # init_dist = np.linalg.norm(self.env.goal - self.obs["achieved_goal"])
             # init_dist = self.init_dist
             constraint2 = np.zeros(self.rollout_limit + 1)
@@ -142,6 +150,7 @@ class System(object):
                     obs[:3] /= self.position_bound
                     obs[3:] /= self.velocity_bound
                     # obs[3:]=opt.x_0[:,3:]
+                    # Evaluate boundary condition
                     if i % 1 == 0:
                         # x_check=np.hstack([])
                         x_check = obs.reshape(1, -1)
@@ -164,7 +173,7 @@ class System(object):
 
                         Kp = K[:, :3]
                         Kd = K[:, 3:]
-
+                # Collect rollouts
                 if i < self.rollout_limit:
                     obs = self.obs["observation"].copy()
                     obs[:3] = obs[:3] - self.env.goal
@@ -197,6 +206,9 @@ class System(object):
         return Objective / self.T, constraint2 / init_dist, eigen_value, state
 
     def reset(self, x0=None):
+        '''
+        Reset environment for next experiment
+        '''
         self.obs = self.env.reset()
         self.init_dist = np.linalg.norm(self.env.goal - self.obs["achieved_goal"])
         self.Fail = False
@@ -223,6 +235,9 @@ class System(object):
             # print(self.obs["observation"]-x)
 
     def set_params(self, params):
+        '''
+        Update parameters for controller
+        '''
         q1 = np.repeat(np.power(10, 6 * params[0]), 3)  # param is between -1 and 1
         q2 = np.sqrt(q1) * 0.1
         updated_params = np.hstack((q1.squeeze(), q2.squeeze()))
@@ -230,7 +245,9 @@ class System(object):
 
 
 class GoSafe_Optimizer(object):
-
+    '''
+    Optimizer
+    '''
     def __init__(self, upper_overshoot=0.08, upper_eigenvalue=-10, lengthscale=0.7, ARD=True):
         self.upper_eigenvalue = upper_eigenvalue
         self.upper_overshoot = upper_overshoot
@@ -246,6 +263,7 @@ class GoSafe_Optimizer(object):
         self.eigen_value_std = 21
         self.position_bound = 0.5
         self.velocity_bound = 7
+        # Set up system and optimizer
         self.sys = System(rollout_limit=self.rollout_limit, position_bound=self.position_bound,
                           velocity_bound=self.velocity_bound,
                           upper_eigenvalue=self.upper_eigenvalue)
@@ -264,66 +282,55 @@ class GoSafe_Optimizer(object):
         g1scalar = np.asarray([[g1scalar]])
         g1scalar = g1scalar.reshape(-1, 1)
 
-        # g2 = np.asarray([[g2]])
-        # g2 = g2.reshape(-1, 1)
 
         x0 = state[0][:, 2:]
 
         x = np.asarray(state).squeeze()
 
-        # L=[lengthscale/6,lengthscale/3,0.35,0.3,0.35,2,2,2]
-        # Lengthscales of Matern32
-        #L = [lengthscale / 6, lengthscale / 6, 0.3, 0.3, 0.3, 1.5, 1.5, 1.5]
         L = [lengthscale / 6, lengthscale / 6, 0.25, 0.25, 0.25, 2.2, 2.2, 2.2]
         L_states = np.asarray(L[2:])
 
-        # L = [lengthscale / 6, lengthscale / 3, 0.6, 0.5, 0.8, 24 / 7, 24 / 7, 24 / 7]
         KERNEL_f = GPy.kern.sde_Matern32(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
-        #KERNEL_f = GPy.kern.sde_RBF(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
+
         KERNEL_g = GPy.kern.sde_Matern32(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
-        #KERNEL_g = GPy.kern.sde_RBF(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
+        
         gp_full0 = GPy.models.GPRegression(x[0, :].reshape(1, -1), fscalar, noise_var=0.1 ** 2, kernel=KERNEL_f)
         gp_full1 = GPy.models.GPRegression(x[0, :].reshape(1, -1), g1scalar, noise_var=0.1 ** 2, kernel=KERNEL_g)
-        # gp2 = GPy.models.GPRegression(x[0, :].reshape(1, -1), g2, noise_var=0.01 ** 2, kernel=KERNEL_g)
 
         a=x[:,:2]
         L = np.asarray(L[:2])
-        #KERNEL_f = GPy.kern.sde_RBF(input_dim=a.shape[1], lengthscale=L, ARD=ARD, variance=1)
+ 
         KERNEL_f= GPy.kern.sde_Matern32(input_dim=a.shape[1], lengthscale=L, ARD=ARD, variance=1)
-        # KERNEL_f = GPy.kern.sde_Matern52(input_dim=a.shape[1], lengthscale=L, ARD=ARD, variance=1)
-        # KERNEL_g = GPy.kern.sde_Matern52(input_dim=a.shape[1], lengthscale=L, ARD=ARD, variance=1)
+ 
         KERNEL_g = GPy.kern.sde_Matern32(input_dim=a.shape[1], lengthscale=L, ARD=ARD, variance=1)
-        #KERNEL_g = GPy.kern.sde_RBF(input_dim=a.shape[1], lengthscale=L, ARD=ARD, variance=1)
+
         gp0 = GPy.models.GPRegression(a[0, :].reshape(1, -1), fscalar, noise_var=0.1 ** 2, kernel=KERNEL_f)
         gp1 = GPy.models.GPRegression(a[0, :].reshape(1, -1), g1scalar, noise_var=0.1 ** 2, kernel=KERNEL_g)
 
         bounds = [[1 / 3, 1], [-1, 1]]
 
 
-        self.opt = GoSafeSwarm_Contextual(gp=[gp0, gp1], gp_full=[gp_full0, gp_full1], bounds=bounds, beta=4.0,
+        self.opt = Contextual_GoSafe(gp=[gp0, gp1], gp_full=[gp_full0, gp_full1], bounds=bounds, beta=4.0,
                                           fmin=[-np.inf, 0], x_0=x0.reshape(-1, 1), L_states=L_states, eta_L=0.4,
                                           eta_u=0.6, max_S1_steps=30,
                                           max_S3_steps=10, eps=0.1, max_data_size=1000, reset_size=500,
                                           boundary_thresshold_l=0.90, boundary_thresshold_u=0.94)
         
-        # self.opt.fast_safe_action=False
-        # self.opt.boundary_thresshold=0.9
-        # self.opt = GoSafeSwarm([gp0,gp1], fmin=[-np.inf, 0], bounds=bounds, beta=3.0,x_0=x0.reshape(-1,1),eta=0.1,tol=0.0,max_S2_steps=0,max_S1_steps=50,max_S3_steps=10,eps=0.1,max_expansion_steps=100,reset_size=500,max_data_size=1000)
-        # self.opt.boundary_ratio=0.8
-        # self.opt.S3_x0_ratio=1
-        # self.opt.safety_cutoff=0.9
         y = np.array([f, g1])
         y = y.squeeze()
         self.add_data(x, y)
-        # for i in range(1,self.rollout_limit):
-        #   self.opt.add_new_data_point(x[i].reshape(1,-1),y)
+  
         self.time_recorded = []
         self.df = pd.DataFrame(
             np.array([[self.params[0], self.params[1], self.opt.criterion, f[0], g1[0], f[0], False]]),
             columns=['q', 'r', 'criterion', 'fval', 'gval', 'fmax', 'Boundary'])
+        # Collect more initial policies for S_0
         self.simulate_data()
 
     def simulate_data(self):
+        '''
+        Collect more initial policies
+        '''
         p = [5 / 6, 1]
         d = [-0.9, -2 / 3]
 
@@ -351,6 +358,9 @@ class GoSafe_Optimizer(object):
             # self.opt.add_new_data_point(x, y)
 
     def optimize(self, update_boundary=False):
+        '''
+        Performs 1 optimization step, i.e. recommend a parameter and run experiments with it
+        '''
         if update_boundary:
             self.opt.update_boundary_points()
         start_time = time.time()
@@ -422,6 +432,7 @@ class GoSafe_Optimizer(object):
 
 iterations = 201
 runs = 20
+# Ploting of safe set
 plot = True
 Reward_data = np.zeros([41, runs])
 Overshoot_summary = np.zeros([2, runs])
@@ -433,13 +444,18 @@ for r in range(runs):
     opt.sys.env.seed(r)
     opt.opt._seed(r)
     if r > 0:
+        # Stop ploting safe set after 1 full run
         plot = False
     for i in range(iterations):
         if i % 5 == 0:
+            # Record optimum found after every 5 iterations
             maximum, fval = opt.opt.get_maximum()
             Reward_data[j, r] = fval[0]
             j += 1
             if plot and i % 20 == 0:
+                # Plot safe set after every 20 iterations
+                
+                # Define parameter space and determine lower bounds
                 q = np.linspace(-1, 1, 25)
                 r_cost = np.linspace(-1, 1, 25)
                 a = np.asarray(np.meshgrid(q, r_cost)).T.reshape(-1, 2)
@@ -479,11 +495,16 @@ for r in range(runs):
 
                 plt.savefig('Safeset' + str(i) + '.png', dpi=300)
 
+        
+        # Optimization step
+        
+        # Check failed set after every 10 iterations for update
         update_boundary = False
         if i % 10 == 0:
             update_boundary = True
         opt.optimize(update_boundary=update_boundary)
         print(i)
+    # Measure failures (constraint violation) and magnitude of violation
     print(opt.failures / iterations)
     Overshoot_summary[0, r] = opt.failures / iterations
     failure = np.maximum(1e-3, iterations - opt.failures)
@@ -493,7 +514,7 @@ for r in range(runs):
     print(max, f)
 
     opt.df.to_csv("Optimizer_queryPoints" + str(r) + ".csv")
-
+# Save recorded data on rewards and constraint violation
 np.savetxt('GoSafe_Overshoot.csv', Overshoot_summary, delimiter=',')
 np.savetxt('GoSafe_Reward.csv', Reward_data, delimiter=',')
 

@@ -3,6 +3,9 @@ from mujoco_py import cymj
 
 from scipy.optimize import minimize
 #Inspired from https://github.com/abr/abr_control/blob/f60bf4dc47927224af610b047c85bb33e4b6d1bb/abr_control/arms/mujoco_config.py#L154
+'''
+Class which uses mujoco functions to set up inverse dynamics operational space controller
+'''
 class inverse_dynamics_control(object):
 
     def __init__(self,env,njoints,target=np.zeros(3),id='panda:grip',penalty=1e-5):

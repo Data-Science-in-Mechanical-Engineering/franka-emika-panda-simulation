@@ -17,7 +17,8 @@ class System(object):
 
     def __init__(self,position_bound,velocity_bound,rollout_limit=0,upper_eigenvalue=0):
         self.env = gym.make("PandaEnv-v0")
-
+        
+        # Define Q,R, A, B, C matrices
         self.Q=np.eye(6)
         self.R=np.eye(3)/100
         self.env.seed(0)
@@ -28,6 +29,7 @@ class System(object):
         self.B = np.zeros([6, 3])
         self.B[3:, :] = np.eye(3)
         self.T=2000
+        # Set up inverse dynamics controller
         self.ID = inverse_dynamics_control(env=self.env, njoints=9, target=self.env.goal)
         self.id = self.env.sim.model.site_name2id("panda:grip")
         self.rollout_limit=rollout_limit
@@ -37,6 +39,7 @@ class System(object):
         self.position_bound=position_bound
         self.velocity_bound=velocity_bound
         self.upper_eigenvalue=upper_eigenvalue
+        # Define weighting matrix to set torques 4,6,7,.. (not required for movement) to 0.
         T1 = np.zeros(9)
         T1[4] = 1
         T1[6:] = 1
@@ -45,7 +48,9 @@ class System(object):
         self.N_bar = np.dot(N, np.linalg.pinv(np.dot(np.eye(9), N), rcond=1e-4))
 
     def simulate(self,params=None,render=False,opt=None,update=False):
+        # Simulate the robot/run experiments
         x0=None
+        # Update parameters
         if params is not None:
 
             if update:
@@ -55,13 +60,13 @@ class System(object):
                 self.Q=np.diag(params)
 
             self.R=np.eye(3)/100*np.power(10,3*params[1]) #param is between -1 and 1
-
+            # If want to change inition condition update, IC
             if opt is not None:
                 if opt.criterion in ["S2"]:
                     x0=params[opt.state_idx]
                     x0[3:]=np.zeros(3)
 
-
+        # Get controller
         P = np.matrix(scipy.linalg.solve_continuous_are(self.A, self.B, self.Q, self.R))
         K = scipy.linalg.inv(self.R) * (self.B.T * P)
 
@@ -127,6 +132,7 @@ class System(object):
 
 
         else:
+            # Simulate the arm
             init_dist = np.linalg.norm(self.env.goal - self.obs["achieved_goal"])
             #init_dist = self.init_dist
             for i in range(self.T):
@@ -136,6 +142,7 @@ class System(object):
                     obs[:3]/=self.position_bound
                     obs[3:]/=self.velocity_bound
                     #obs[3:]=opt.x_0[:,3:]
+                    # Evaluate Boundary condition/not necessary here as we use SafeOpt
                     if i %10==0:
                         self.at_boundary, self.Fail, params = opt.check_rollout(state=obs.reshape(1,-1), action=params)
 
@@ -157,7 +164,7 @@ class System(object):
                         Kp = K[:, :3]
                         Kd = K[:, 3:]
 
-
+                # Collect rollouts (not necessary here as we run safeopt)
                 if i < self.rollout_limit:
                     obs=self.obs["observation"].copy()
                     obs[:3]=obs[:3]-self.env.goal
@@ -190,6 +197,9 @@ class System(object):
 
 
     def reset(self,x0=None):
+        '''
+        Reset environmnent for next experiment
+        '''
         self.obs = self.env.reset()
         #self.init_dist = np.linalg.norm(self.env.goal - self.obs["achieved_goal"])
         self.Fail=False
@@ -198,27 +208,14 @@ class System(object):
         if x0 is not None:
             x0*=self.position_bound
             self.env.goal=self.obs["observation"][:3]-x0[:3]
-            #Kp=500*np.eye(3)
-            #Kd=np.sqrt(Kp)*0.1
-            #x[:3]+=self.env.goal.squeeze()
-            #for i in range(5000):
-            #    bias = self.ID.g()
-            #    M = self.ID.M()
-
-            #    J = self.ID.Jp(self.id)
-
-            #    Mx, Mx_inv = self.ID.Mx(M, J)
-            #    wM_des = np.dot(Kp, (x[:3] - self.obs["achieved_goal"])) - np.dot(Kd, self.obs["observation"][3:]-x[3:])
-            #    u = -bias
-            #    u += np.dot(J.T, np.dot(Mx, wM_des))
-            #    self.obs, reward, done, info = self.env.step(u)
-
-            #print(self.obs["observation"]-x)
 
 
 
 
     def set_params(self, params):
+        '''
+        Update parameters for controller
+        '''
         q1 = np.repeat(np.power(10, 6*params[0]),3) #param is between -1 and 1
         q2 = np.sqrt(q1)*0.1
         updated_params = np.hstack((q1.squeeze(), q2.squeeze()))
@@ -226,6 +223,9 @@ class System(object):
 
 
 class SafeOpt_Optimizer(object):
+    '''
+    Optimizer
+    '''
     def __init__(self, upper_overshoot=0.08,upper_eigenvalue=-10, lengthscale=0.7, ARD=True):
         self.upper_eigenvalue=upper_eigenvalue
         self.upper_overshoot=upper_overshoot
@@ -237,10 +237,11 @@ class SafeOpt_Optimizer(object):
         self.mean_reward = -0.33
         self.std_reward = 0.14
         self.eigen_value_std = 21
+        # Set up system and optimizer
         self.sys = System(rollout_limit=0, position_bound=0.5,
                           velocity_bound=7,
                           upper_eigenvalue=self.upper_eigenvalue)
-
+        
         f, g1, g2, state = self.sys.simulate(self.params, update=True)
         g2 = self.upper_eigenvalue - g2
         g2 /= self.eigen_value_std
@@ -256,10 +257,7 @@ class SafeOpt_Optimizer(object):
         L = [lengthscale / 6, lengthscale / 6]
         x=self.params.reshape(1,-1)
         KERNEL_f = GPy.kern.sde_Matern32(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
-        # KERNEL_f = GPy.kern.sde_Matern52(input_dim=a.shape[1], lengthscale=L, ARD=ARD, variance=1)
-        # KERNEL_g = GPy.kern.sde_Matern52(input_dim=a.shape[1], lengthscale=L, ARD=ARD, variance=1)
         KERNEL_g = GPy.kern.sde_Matern32(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)
-        # KERNEL_g = GPy.kern.sde_RBF(input_dim=a.shape[1], lengthscale=L, ARD=ARD, variance=1)
         gp0 = GPy.models.GPRegression(x[0, :].reshape(1, -1), f, noise_var=0.1 ** 2, kernel=KERNEL_f)
         gp1 = GPy.models.GPRegression(x[0, :].reshape(1, -1), g1, noise_var=0.1 ** 2, kernel=KERNEL_g)
 
@@ -268,9 +266,13 @@ class SafeOpt_Optimizer(object):
         self.opt = SafeOpt([gp0, gp1], parameter_set,fmin=[-np.inf, 0], beta=3.5)
 
         self.time_recorded = []
+        # Collect more initial policies for S_0
         self.simulate_data()
 
     def simulate_data(self):
+        '''
+        Collect more initial policies
+        '''
         p = [5/6,1]
         d = [-0.9,-2/3]
 
@@ -290,12 +292,17 @@ class SafeOpt_Optimizer(object):
 
 
     def optimize(self):
+        '''
+        Performs 1 optimization step, i.e. recommend a parameter and run experiments with it
+        '''
         start_time = time.time()
+        # Get parameter
         param = self.opt.optimize()
         self.time_recorded.append(time.time() - start_time)
         print(param, end="")
+        # Run experiment with parameter
         f, g1,g2,state = self.sys.simulate(param,update=True)
-        #print(f, g1, g2,self.opt.criterion)
+        # Update and add collected data to GP
         g2 = self.upper_eigenvalue - g2
         g2 /= self.eigen_value_std
         g1 -= self.upper_overshoot
@@ -315,7 +322,8 @@ class SafeOpt_Optimizer(object):
 
 
 iterations=201
-runs=1
+runs=20
+# Ploting of safe set
 plot=True
 
 Reward_data = np.zeros([41, runs])
@@ -324,9 +332,11 @@ for r in range(runs):
     j=0
     opt = SafeOpt_Optimizer()
     if r>0:
+        # Stop ploting safe set after 1 full run
         plot=False
     for i in range(iterations):
         if i%5==0:
+            # Record optimum found after every 5 iterations
             maximum, f = opt.opt.get_maximum()
             f, g1, g2,dummy = opt.sys.simulate(maximum, update=True)
             f -= opt.mean_reward
@@ -334,6 +344,9 @@ for r in range(runs):
             Reward_data[j, r] = f
             j+=1
             if plot and i%20==0:
+                # Plot safe set after every 20 iterations
+                
+                # Define parameter space and determine lower bounds
                 q=np.linspace(-1,1,25)
                 r_cost=np.linspace(-1,1,25)
                 a = np.asarray(np.meshgrid(q, r_cost)).T.reshape(-1, 2)
@@ -369,16 +382,18 @@ for r in range(runs):
                 ax.set_xlim([-6.1, 6.1])
 
                 plt.savefig('Safeset' + str(i) +'.png', dpi=300)
-
+        
+        # Optimization step
         opt.optimize()
         print(i)
     print(opt.failures / iterations)
-
+    # Measure failures (constraint violation) and magnitude of violation
     Overshoot_summary[0, r] = opt.failures / iterations
     failure=np.maximum(1e-3,iterations-opt.failures)
     Overshoot_summary[1, r] = opt.failure_overshoot / (failure)
     print(Reward_data[40, r], end=" ")
     print(r)
+# Save recorded data on rewards and constraint violation
 np.savetxt('SafeOpt_Overshoot.csv', Overshoot_summary, delimiter=',')
 np.savetxt('SafeOpt_Reward.csv', Reward_data, delimiter=',')
 

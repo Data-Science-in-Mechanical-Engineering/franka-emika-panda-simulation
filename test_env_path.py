@@ -11,11 +11,15 @@ np.random.seed(0)
 import scipy
 from osc_controller import inverse_dynamics_control
 
+'''
+Loads Panda path environment and compares optimum found by safeopt (region1) and our method (region 2)
+'''
 def _Mx(M,J):
     M_inv=np.linalg.inv(M)
     Mx_inv=np.dot(J,np.dot(M_inv,J.T))
     Mx=np.linalg.pinv(Mx_inv,rcond=1e-4)
     return Mx,Mx_inv
+
 
 
 
@@ -30,6 +34,7 @@ joints=9
 _MNN_vector = np.zeros(joints ** 2)
 
 print(env.Tmax)
+# Load inverse dynamics controller
 ID=inverse_dynamics_control(env=env,njoints=joints,target=env.goal)
 id=env.sim.model.site_name2id("panda:grip")
 J=ID.Jp(id)
@@ -53,8 +58,7 @@ region=2 #region=2 gosafe maximum
 
 #q_2=6.15784
 #r_2=9.47
-q_2=6*1
-r_2=np.power(10.,3*0.44357401)
+
 
 
 
@@ -63,10 +67,12 @@ r_2=np.power(10.,3*0.44357401)
 #r_1 = np.power(10.,3*0.01695)
 q_1=6
 r_1 = np.power(10.,3*-1)
-
+q_2=6*1
+r_2=np.power(10.,3*0.44357401)
 kappa=0.0
 
 if region==1:
+    
     Q_pos=np.power(10,q_1)
     Q_vel=np.sqrt(Q_pos)*kappa
     R = np.eye(3) / 100*r_1
@@ -84,21 +90,17 @@ Q=np.diag([Q_pos, Q_pos,Q_pos,Q_vel,Q_vel,Q_vel])
 P=np.matrix(scipy.linalg.solve_continuous_are(A,B,Q,R))
 K = scipy.linalg.inv(R)*(B.T*P)
 
-#Kp[2,2]=Kp[2,2]*1.5
+
 
 K=np.asarray(K)
 
-#Kp=np.eye(3)*300 #Check out impedance controller: [100,800,1000] , inverse dynamics controller [200 500 1000]
-#Kp[0,0]=Kp[0,0]
-#Kp[1,1]=Kp[1,1]
-#Kp[2,2]=Kp[2,2]
-#Kd=np.sqrt(Kp)*2
 
 Kp=K[:,:3]
 Kd=K[:,3:]
 controller_class=["impedance","gravity_compensation", "inverse_dynamics_task_space","inverse_dynamics_joint_space"]
 controller = controller_class[0]
 
+# Sets torques 4, 6,7 equal to 0
 weighted=True
 
 
@@ -128,21 +130,11 @@ Total_reward=0
 #delta_z=lambda x: np.sin(x/delta_x*np.pi)
 reference=np.zeros([6,num_steps])
 states=np.zeros([6,num_steps])
+# Simulate robot arm
 for i in range(num_steps):
     states[:,i]=np.hstack((obs["achieved_goal"],obs["velocity_EE"]))
     reference[:3,i]=obs["desired_goal"]
     reference[3:,i]=obs["velocity_goal"]
-    # if i<500:
-    #     obs["desired_goal"]=obs["achieved_goal"].copy()
-    #     obs["desired_goal"][2]=env.goal[2]
-    #
-    # else:
-    #     obs["desired_goal"][1]=f(obs["desired_goal"][0])
-
-    #x_dist = env.goal[0] - obs["achieved_goal"][0]
-
-
-
     bias = ID.g()
     M = ID.M()
 
@@ -157,8 +149,7 @@ for i in range(num_steps):
 
     wM_des = -np.dot(Kp, (obs["observation"][:3])) - np.dot(Kd, obs["observation"][3:])
     error=np.maximum(error,np.linalg.norm(obs["desired_goal"] - obs["achieved_goal"]))
-    #error = np.maximum(error, np.linalg.norm(obs["observation"][:3]))
-    #ddq_des=200*(q_des-env.sim.data.qpos)-2*np.sqrt(200)*env.sim.data.qvel
+    
     if controller == controller_class[0]:  # Impedance control
         u += np.dot(J.T, wM_des)
     #u+=np.dot(M,ddq_des)
@@ -169,13 +160,9 @@ for i in range(num_steps):
             u += np.dot(J.T, np.dot(approx_M, wM_des))
         else:
             u += np.dot(J.T, np.dot(Mx, wM_des))
-    # elif controller==controller_class[3]:
-    #    x=np.hstack((env.sim.data.qpos,env.sim.data.qvel))
-    #    x[:joints]=x[:joints]-q_des
-
-    #    u+=np.dot(M,np.dot(-K,x))
-
+            
     if weighted:
+        # Set torques 4,6,7,.. to 0
         T1 = np.zeros(9)
         T1[4] =1
         T1[6:] = 1
@@ -188,7 +175,6 @@ for i in range(num_steps):
 
 
     torque=np.clip(torque,env.action_space.low,env.action_space.high)
-    #noise=np.maximum(np.random.normal(size=9)*torque,0.1*np.ones(9))
 
     obs, reward, done, info = env.step(torque)
     Total_reward+=reward
@@ -197,9 +183,8 @@ for i in range(num_steps):
 
 print(error)
 print(Total_reward/2000)
-#print((obs["achieved_goal"]-env.goal))
-#print((obs["desired_goal"]-obs["achieved_goal"]),constraint_1,constraint_2,contraint_3,Total_reward)
 
+# Plot state evoluation
 fig, axs = plt.subplots(6, sharex=True,figsize=(12, 9.6))
 fig.suptitle("State Evolution GoSafe")
 ylabel=['$r_{e,x}$','$r_{e,y}$','$r_{e,z}$','$v_{e,x}$','$v_{e,y}$','$v_{e,z}$']

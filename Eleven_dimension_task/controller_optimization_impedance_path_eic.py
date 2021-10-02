@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
-from safeopt import SafeOptSwarm,GoSafeSwarm_Contextual
+from safeopt import SafeOptSwarm,Contextual_GoSafe
 import gym
 import Panda_Env #Library defined for the panda environment
 import mujoco_py
@@ -171,22 +171,6 @@ class System(object):
         if x0 is not None:
             x0*=self.position_bound
             self.env.goal=self.obs["observation"][:3]-x0[:3]
-            #Kp=500*np.eye(3)
-            #Kd=np.sqrt(Kp)*0.1
-            #x[:3]+=self.env.goal.squeeze()
-            #for i in range(5000):
-            #    bias = self.ID.g()
-            #    M = self.ID.M()
-
-            #    J = self.ID.Jp(self.id)
-
-            #    Mx, Mx_inv = self.ID.Mx(M, J)
-            #    wM_des = np.dot(Kp, (x[:3] - self.obs["achieved_goal"])) - np.dot(Kd, self.obs["observation"][3:]-x[3:])
-            #    u = -bias
-            #    u += np.dot(J.T, np.dot(Mx, wM_des))
-            #    self.obs, reward, done, info = self.env.step(u)
-
-            #print(self.obs["observation"]-x)
 
 
 
@@ -198,6 +182,9 @@ class System(object):
         return updated_params
 
 class ExactGPModel(gpytorch.models.ExactGP,GPyTorchModel):
+    '''
+    Define ExactGP from gpytorch module
+    '''
     def __init__(self, train_x, train_y, likelihood=gpytorch.likelihoods.GaussianLikelihood()):
         super(ExactGPModel, self).__init__(train_x, train_y, likelihood)
         self.dim=train_x.shape[1]
@@ -223,6 +210,9 @@ class acqui_options(object):
 
 
 class Eic(object):
+    '''
+    EIC optimizer
+    '''
     def __init__(self, error_bound=0.25, lengthscale=0.4, ARD=True):
         self.error_bound=error_bound
         q =4/6
@@ -247,22 +237,14 @@ class Eic(object):
         f -= self.mean_reward
         f /= self.std_reward
         f*=-1
-        #f = np.asarray([[f]])
-        #f = f.reshape(-1, 1)
-        #g1 = np.asarray([[g1]])
-        #g1 = g1.reshape(-1, 1)
         x = self.params.reshape(1, -1)
         x = torch.from_numpy(x).float()
         x = torch.reshape(x, (1, -1))
-        # g1 = torch.from_numpy(g1)
-        # f = torch.from_numpy(f)
         y_f = torch.tensor([f]).float()
         y_g = torch.tensor([g1]).float()
-        # y_g[:,0]=y_g[:,0].double()
         self.gp_obj = ExactGPModel(train_x=x.clone(), train_y=y_f.clone())
         self.gp_con = ExactGPModel(train_x=x.clone(), train_y=y_g.clone())
         self.constraints = {1: (None, 0)}
-        # self.gp_constraint= GPmodel(dim=x.shape[1], train_X=x, train_Y=g1.view(-1), options=cfg.gpmodel_cons,which_type="cons",nu=1.5)
         model_list = ModelListGP(self.gp_obj, self.gp_con)
         self.acqui_options = acqui_options()
         self.eic = ExpectedImprovementWithConstraints(model_list=model_list, constraints=self.constraints,
@@ -291,6 +273,9 @@ class Eic(object):
             self.add_data(self.params.reshape(1, -1), y)
 
     def optimize(self):
+        '''
+        Run 1 optimization step
+        '''
         start_time = time.time()
         param, val = self.eic.get_next_point()
         param = param.numpy().squeeze()
