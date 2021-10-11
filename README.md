@@ -37,10 +37,12 @@ To run SafeOpt and Contextual GoSafe code is required (EIC additionally requires
 A. Running Eight dimensional Task
 
 command: python3 Eight_dimension_task/8D_task.py method 
+
 with method = GoSafeCon or SafeOpt
 
 
 B. Running Eleven dimensional Task
 
 command: python3 Eleven_dimension_task/11D_task.py method 
+
 with method = GoSafeCon or SafeOpt or eic
