@@ -46,3 +46,8 @@ B. Running Eleven dimensional Task
 command: python3 Eleven_dimension_task/11D_task.py method 
 
 with method = GoSafeCon or SafeOpt or eic
+
+License
+-------
+
+The code is licenced under the MIT license and free to use by anyone without any restrictions.
