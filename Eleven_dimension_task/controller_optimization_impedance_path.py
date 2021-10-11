@@ -12,6 +12,8 @@ import random
 import time
 import logging
 import pandas as pd
+import os
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 class System(object):
 
     def __init__(self,position_bound,velocity_bound,rollout_limit=0,upper_eigenvalue=0):
@@ -179,9 +181,9 @@ class System(object):
 
 
     def set_params(self, params):
-    '''
-    Set Parameters for the system
-    '''
+        '''
+        Set Parameters for the system
+        '''
         q1 = np.repeat(np.power(10, 6*params[0]),3) #param is between -1 and 1
         q2 = np.sqrt(q1)*params[1]*(self.kappa_max-self.kappa_min)+self.kappa_min
         updated_params = np.hstack((q1.squeeze(), q2.squeeze()))
@@ -191,9 +193,9 @@ class System(object):
 
 
 class SafeOpt_Optimizer(object):
-'''
-SafeOpt optimizer
-'''
+    '''
+    SafeOpt optimizer
+    '''
     def __init__(self, error_bound=0.25, lengthscale=0.4, ARD=True):
         self.error_bound=error_bound
         q =4/6
@@ -283,9 +285,9 @@ SafeOpt optimizer
 
 
 class GoSafeContextual_Optimizer(object):
-'''
-Contextual GoSafe optimizer
-'''
+    '''
+    Contextual GoSafe optimizer
+    '''
     def __init__(self, error_bound=0.25, lengthscale=0.4, ARD=True):
         self.error_bound=error_bound
         q =4/6
@@ -460,91 +462,89 @@ Contextual GoSafe optimizer
 
 
 #opt=SafeOpt_Optimizer()
-method="SafeOpt"
-#method="GoSafe"
-contextual=True
-iterations=201
-runs=20
+def experiment(method="SafeOpt"):
+    #method="GoSafe"
+    contextual=True
+    iterations=201
+    runs=20
 
-if method=="GoSafe":
-    Reward_data=np.zeros([41,runs])
-    Overshoot_summary=np.zeros([2,runs])
-    for r in range(runs):
-        j=0
-        if contextual:
-            opt=GoSafeContextual_Optimizer()
-        else:
-            opt = GoSafe_Optimizer()
-        random.seed(r+2)
-        np.random.seed(r+2)
-        opt.sys.env.seed(r+2)
-        opt.opt._seed(r+2)
+    if method=="GoSafeCon":
+        Reward_data=np.zeros([41,runs])
+        Overshoot_summary=np.zeros([2,runs])
+        for r in range(runs):
+            j=0
+            if contextual:
+                opt=GoSafeContextual_Optimizer()
+            else:
+                opt = GoSafe_Optimizer()
+            random.seed(r+2)
+            np.random.seed(r+2)
+            opt.sys.env.seed(r+2)
+            opt.opt._seed(r+2)
 
-        for i in range(iterations):
-            # Collect optimum after every 5 iterations
-            if i%5==0:
-                maximum, fval = opt.opt.get_maximum()
-                Reward_data[j,r]=fval[0]
-                j+=1
-            update_boundary=False
-            if i%30==0:
-                update_boundary=True
-            opt.optimize(update_boundary=update_boundary)
-            print(i)
-        # Measure failures (constraint violation) during experiment
-        print(opt.failures / iterations)
-        Overshoot_summary[0, r] = opt.failures / iterations
-        failure=np.maximum(1e-3,iterations-opt.failures)
-        Overshoot_summary[1,r]=opt.failure_overshoot/(failure)
-        print(opt.failure_overshoot/(failure),r)
-        max, f = opt.opt.get_maximum()
-        print(max,f)
-        opt.df.to_csv("Optimizer_queryPoints_path" + str(r) + ".csv")
-    # Save data from rewards and failure
-    np.savetxt('GoSafe_error.csv', Overshoot_summary, delimiter=',')
-    np.savetxt('GoSafe_Reward.csv', Reward_data, delimiter=',')
+            for i in range(iterations):
+                # Collect optimum after every 5 iterations
+                if i%5==0:
+                    maximum, fval = opt.opt.get_maximum()
+                    Reward_data[j,r]=fval[0]
+                    j+=1
+                update_boundary=False
+                if i%30==0:
+                    update_boundary=True
+                opt.optimize(update_boundary=update_boundary)
+                print(i)
+            # Measure failures (constraint violation) during experiment
+            print(opt.failures / iterations)
+            Overshoot_summary[0, r] = opt.failures / iterations
+            failure=np.maximum(1e-3,iterations-opt.failures)
+            Overshoot_summary[1,r]=opt.failure_overshoot/(failure)
+            print(opt.failure_overshoot/(failure),r)
+            max, f = opt.opt.get_maximum()
+            print(max,f)
+            opt.df.to_csv("Optimizer_queryPoints_path" + str(r) + ".csv")
+        # Save data from rewards and failure
+        np.savetxt('GoSafe_error.csv', Overshoot_summary, delimiter=',')
+        np.savetxt('GoSafe_Reward.csv', Reward_data, delimiter=',')
 
-elif method=="SafeOpt":
-    
-    Reward_data = np.zeros([41, runs])
-    Overshoot_summary = np.zeros([2, runs])
-    for r in range(runs):
-        j=0
-        opt = SafeOpt_Optimizer()
-        random.seed(r + 2)
-        np.random.seed(r + 2)
-        opt.sys.env.seed(r + 2)
-        for i in range(iterations):
-            if i%5==0:
-                maximum, f = opt.opt.get_maximum()
-                Reward_data[j, r] = f
-                j+=1
-            opt.optimize()
-            print(i)
-        print(opt.failures / iterations,r)
+    elif method=="SafeOpt":
+        
+        Reward_data = np.zeros([41, runs])
+        Overshoot_summary = np.zeros([2, runs])
+        for r in range(runs):
+            j=0
+            opt = SafeOpt_Optimizer()
+            random.seed(r + 2)
+            np.random.seed(r + 2)
+            opt.sys.env.seed(r + 2)
+            for i in range(iterations):
+                if i%5==0:
+                    maximum, f = opt.opt.get_maximum()
+                    Reward_data[j, r] = f
+                    j+=1
+                opt.optimize()
+                print(i)
+            print(opt.failures / iterations,r)
 
-        Overshoot_summary[0, r] = opt.failures / iterations
-        failure=np.maximum(1e-3,iterations-opt.failures)
-        Overshoot_summary[1, r] = opt.failure_overshoot / (failure)
-        max, f = opt.opt.get_maximum()
-        print(max, f)
-    np.savetxt('SafeOpt_Overshoot.csv', Overshoot_summary, delimiter=',')
-    np.savetxt('SafeOpt_Reward.csv', Reward_data, delimiter=',')
-
-
+            Overshoot_summary[0, r] = opt.failures / iterations
+            failure=np.maximum(1e-3,iterations-opt.failures)
+            Overshoot_summary[1, r] = opt.failure_overshoot / (failure)
+            max, f = opt.opt.get_maximum()
+            print(max, f)
+        np.savetxt('SafeOpt_Overshoot.csv', Overshoot_summary, delimiter=',')
+        np.savetxt('SafeOpt_Reward.csv', Reward_data, delimiter=',')
 
 
 
-print(opt.failures/iterations)
-max,f=opt.opt.get_maximum()
-#max=[2.00179108e+00,4.13625539e+00, 3.34599393e+00, 7.41304209e-01,2.81500345e-01, 3.13137132e-03]
-time_recorder=np.asarray(opt.time_recorded)
-print("Time:",time_recorder.mean(),time_recorder.std())
-print("maximum",max)
-
-#f,g1,g2,state=opt.sys.simulate(max,update=True,render=True)
 
 
+    print(opt.failures/iterations)
+    max,f=opt.opt.get_maximum()
+    #max=[2.00179108e+00,4.13625539e+00, 3.34599393e+00, 7.41304209e-01,2.81500345e-01, 3.13137132e-03]
+    time_recorder=np.asarray(opt.time_recorded)
+    print("Time:",time_recorder.mean(),time_recorder.std())
+    print("maximum",max)
+
+    #f,g1,g2,state=opt.sys.simulate(max,update=True,render=True)
 
 
 

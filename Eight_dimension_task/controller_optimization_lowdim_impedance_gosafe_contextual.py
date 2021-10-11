@@ -13,7 +13,8 @@ import random
 import time
 import logging
 plt.rcParams.update({'font.size': 16})
-
+import os
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 class System(object):
 
     def __init__(self, position_bound, velocity_bound, rollout_limit=0, upper_eigenvalue=0):
@@ -287,7 +288,7 @@ class GoSafe_Optimizer(object):
 
         x = np.asarray(state).squeeze()
 
-        L = [lengthscale / 6, lengthscale / 6, 0.25, 0.25, 0.25, 2.2, 2.2, 2.2]
+        L = [lengthscale / 6, lengthscale / 6, 0.3, 0.3, 0.3, 2.5, 2.5, 2.5]
         L_states = np.asarray(L[2:])
 
         KERNEL_f = GPy.kern.sde_Matern32(input_dim=x.shape[1], lengthscale=L, ARD=ARD, variance=1)

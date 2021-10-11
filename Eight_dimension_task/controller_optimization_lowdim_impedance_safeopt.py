@@ -13,6 +13,8 @@ import random
 import time
 import logging
 plt.rcParams.update({'font.size': 16})
+import os
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 class System(object):
 
     def __init__(self,position_bound,velocity_bound,rollout_limit=0,upper_eigenvalue=0):
