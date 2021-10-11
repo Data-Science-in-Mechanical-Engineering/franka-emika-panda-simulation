@@ -34,15 +34,13 @@ We consider 2 tasks:
 
 To run SafeOpt and Contextual GoSafe code is required (EIC additionally requires https://github.com/alonrot/classified_regression ).
 
-### Running Eight dimensional Task:
+A. Running Eight dimensional Task
 
 command: python3 Eight_dimension_task/8D_task.py method 
-
 with method = GoSafeCon or SafeOpt
 
 
-### Running Eleven dimensional Task:
+B. Running Eleven dimensional Task
 
 command: python3 Eleven_dimension_task/11D_task.py method 
-
 with method = GoSafeCon or SafeOpt or eic
