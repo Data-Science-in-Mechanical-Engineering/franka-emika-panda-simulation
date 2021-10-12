@@ -20,7 +20,14 @@ Follow the following commands for running the simulation:
 
 Furthermore, a simple gym environment has also been implemented where the action space consists of the joint torques.
 
-Installation: ```pip install -e .```
+Installation: ```pip install -e .``` 
+
+To import simulation: 
+``` 
+import Panda_Env 
+import gym
+env=gym.make("PandaEnvPath-v0")
+```
 
 Testing:
 ``` test_env.py ``` can be run to visualize a simple impedance controller.
@@ -29,23 +36,35 @@ Testing:
 ## Simulation tasks
 We consider 2 tasks:
 
-1. Eight dimensional: Reaching a desired positive task
-2. Path following task.
+1. Eight dimensional Task: Reaching a desired positive task
+2. Eleven dimensional Task: Path following task.
 
 To run SafeOpt and Contextual GoSafe code is required (EIC additionally requires https://github.com/alonrot/classified_regression ).
 
 A. Running Eight dimensional Task
 
-command: python3 Eight_dimension_task/8D_task.py method 
+command: ```python3 Eight_dimension_task/8D_task.py method ```
 
 with method = GoSafeCon or SafeOpt
 
 
 B. Running Eleven dimensional Task
 
-command: python3 Eleven_dimension_task/11D_task.py method 
+command: ```python3 Eleven_dimension_task/11D_task.py method ```
 
 with method = GoSafeCon or SafeOpt or eic
+
+## Files
+1. ```setup.py```: Installation file
+2. ```osc_controller.py```: Class which defines functions used for operational space controllers (e.g. Getting jacobian, mass matrix etc.)
+3. ```test.py``` and ```test_env_path.py```: File used for testing the 8D task and 11D task environment respectively.
+4. ```Eight_dimension_task``` and ```Eleven_dimension_task```: Contains files used to run experiments for 8D and 11D tasks respectively. 
+
+Contributors
+-------
+URDF files: https://github.com/StanfordASL/PandaRobot.jl
+
+Simulation and Experiments: Bhavya Sukhija
 
 License
 -------
