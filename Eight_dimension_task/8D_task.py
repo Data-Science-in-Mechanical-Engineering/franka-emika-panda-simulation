@@ -2,8 +2,8 @@ import sys
 def main():
     args=sys.argv[1:]
     assert len(args) == 1, 'Only 1 Argument accepted'
-    if args[0]=="GoSafeCon":
-        import controller_optimization_lowdim_impedance_gosafe_contextual
+    if args[0]=="GosafeOpt":
+        import controller_optimization_lowdim_impedance_gosafeopt
     elif args[0]=="SafeOpt":
         import controller_optimization_lowdim_impedance_safeopt
     

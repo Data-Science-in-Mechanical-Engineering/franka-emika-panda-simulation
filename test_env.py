@@ -1,6 +1,6 @@
 import numpy as np
 import gym
-import Panda_Env #Library defined for the panda environment
+import pandaenv #Library defined for the panda environment
 import mujoco_py
 import random
 import matplotlib.pyplot as plt
@@ -8,7 +8,7 @@ plt.rcParams.update({'font.size': 16})
 random.seed(0)
 np.random.seed(0)
 import scipy
-from osc_controller import inverse_dynamics_control
+from pandaenv.utils import inverse_dynamics_control
 
 def _Mx(M,J):
     M_inv=np.linalg.inv(M)
@@ -20,7 +20,7 @@ def _Mx(M,J):
 Loads Panda environment and compares optimum found by safeopt (region1) and our method (region 2)
 '''
 
-env=gym.make("PandaEnv-v0")
+env=gym.make("PandaEnvBasic-v0")
 
 env.seed(0)
 obs=env.reset()

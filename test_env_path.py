@@ -1,6 +1,6 @@
 import numpy as np
 import gym
-import Panda_Env #Library defined for the panda environment
+import pandaenv #Library defined for the panda environment
 import mujoco_py
 import random
 import matplotlib.pyplot as plt
@@ -9,7 +9,7 @@ from scipy.interpolate import interp1d
 random.seed(0)
 np.random.seed(0)
 import scipy
-from osc_controller import inverse_dynamics_control
+from pandaenv.utils import inverse_dynamics_control
 
 '''
 Loads Panda path environment and compares optimum found by safeopt (region1) and our method (region 2)

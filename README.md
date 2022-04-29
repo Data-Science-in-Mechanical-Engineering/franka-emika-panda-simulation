@@ -20,7 +20,9 @@ Follow the following commands for running the simulation:
 
 Furthermore, a simple gym environment has also been implemented where the action space consists of the joint torques.
 
-Installation: ```pip install -e .``` 
+Installation: ```pip install .```
+
+To run gosafeopt experiments: ```pip install .[gosafeopt]```
 
 To import simulation: 
 ``` 
@@ -45,14 +47,14 @@ A. Running Eight dimensional Task
 
 command: ```python3 Eight_dimension_task/8D_task.py method ```
 
-with method = GoSafeCon or SafeOpt
+with method = GoSafeOpt or SafeOpt
 
 
 B. Running Eleven dimensional Task
 
 command: ```python3 Eleven_dimension_task/11D_task.py method ```
 
-with method = GoSafeCon or SafeOpt or eic
+with method = GoSafeOpt or SafeOpt or eic
 
 ## Files
 1. ```setup.py```: Installation file

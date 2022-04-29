@@ -3,7 +3,7 @@ dir_path = os.path.dirname(os.path.realpath(__file__))
 os.chdir(dir_path)
 import copy
 import numpy as np
-
+from os import path
 import gym
 from gym import error, spaces
 from gym.utils import seeding
@@ -28,7 +28,11 @@ class PandaEnvPath(gym.GoalEnv):
 
     def __init__(self,n_substeps=1,initial_qpos=INITIAL_q,n_actions=9):
 
-        self.model=mujoco_py.load_model_from_path("assets/Panda_xml/model_torque_path.xml")
+        model_path = "Panda_xml/model_torque_path.xml"
+        fullpath = os.path.join(os.path.dirname(__file__), "assets", model_path)
+        if not path.exists(fullpath):
+            raise OSError(f"File {fullpath} does not exist")
+        self.model=mujoco_py.load_model_from_path(fullpath)
         self.sim=mujoco_py.MjSim(self.model,nsubsteps=n_substeps)
         self.viewer=None
         self._viewers={}

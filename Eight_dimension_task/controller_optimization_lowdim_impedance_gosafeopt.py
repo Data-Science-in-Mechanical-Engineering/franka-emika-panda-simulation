@@ -2,12 +2,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import matplotlib
-from safeopt import SafeOptSwarm, Contextual_GoSafe
+from gosafeopt import SafeOptSwarm, GoSafeOptPractical
 import gym
-import Panda_Env  # Library defined for the panda environment
+import pandaenv  # Library defined for the panda environment
 import mujoco_py
 import scipy
-from osc_controller import inverse_dynamics_control
+from pandaenv.utils import inverse_dynamics_control
 import GPy
 import random
 import time
@@ -18,7 +18,7 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 class System(object):
 
     def __init__(self, position_bound, velocity_bound, rollout_limit=0, upper_eigenvalue=0):
-        self.env = gym.make("PandaEnv-v0")
+        self.env = gym.make("PandaEnvBasic-v0")
         self.low_eigen_value = False
         # Define Q,R, A, B, C matrices
         self.Q = np.eye(6)
@@ -311,7 +311,7 @@ class GoSafe_Optimizer(object):
         bounds = [[1 / 3, 1], [-1, 1]]
 
 
-        self.opt = Contextual_GoSafe(gp=[gp0, gp1], gp_full=[gp_full0, gp_full1], bounds=bounds, beta=4.0,
+        self.opt = GoSafeOptPractical(gp=[gp0, gp1], gp_full=[gp_full0, gp_full1], bounds=bounds, beta=4.0,
                                           fmin=[-np.inf, 0], x_0=x0.reshape(-1, 1), L_states=L_states, eta_L=0.4,
                                           eta_u=0.6, max_S1_steps=30,
                                           max_S3_steps=10, eps=0.1, max_data_size=1000, reset_size=500,

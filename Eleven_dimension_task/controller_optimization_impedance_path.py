@@ -1,12 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
-from safeopt import SafeOptSwarm,Contextual_GoSafe
+from gosafeopt import SafeOptSwarm, GoSafeOptPractical
 import gym
-import Panda_Env #Library defined for the panda environment
+import pandaenv #Library defined for the panda environment
 import mujoco_py
 import scipy
-from osc_controller import inverse_dynamics_control
+from pandaenv.utils import inverse_dynamics_control
 import GPy
 import random
 import time
@@ -284,9 +284,9 @@ class SafeOpt_Optimizer(object):
         print(f, g1, constraint_satisified)
 
 
-class GoSafeContextual_Optimizer(object):
+class GoSafeOpt_Optimizer(object):
     '''
-    Contextual GoSafe optimizer
+    GoSafeOpt optimizer
     '''
     def __init__(self, error_bound=0.25, lengthscale=0.4, ARD=True):
         self.error_bound=error_bound
@@ -348,7 +348,7 @@ class GoSafeContextual_Optimizer(object):
         gp0 = GPy.models.GPRegression(a[0, :].reshape(1, -1), fscalar, noise_var=0.1 ** 2, kernel=KERNEL_f)
         gp1 = GPy.models.GPRegression(a[0, :].reshape(1, -1), g1scalar, noise_var=0.1 ** 2, kernel=KERNEL_g)
 
-        self.opt = Contextual_GoSafe(gp=[gp0, gp1], gp_full=[gp_full0, gp_full1], bounds=bounds,beta=3,
+        self.opt = GoSafeOptPractical(gp=[gp0, gp1], gp_full=[gp_full0, gp_full1], bounds=bounds,beta=3,
                                           fmin=[-np.inf, 0], x_0=x0.reshape(-1, 1), L_states=L_states, eta_L=0.3,eta_u=0.75,
                                           max_S1_steps=100,
                                           max_S3_steps=10, eps=0.1, max_data_size=1000, reset_size=500,
@@ -464,19 +464,15 @@ class GoSafeContextual_Optimizer(object):
 #opt=SafeOpt_Optimizer()
 def experiment(method="SafeOpt"):
     #method="GoSafe"
-    contextual=True
     iterations=201
     runs=20
 
-    if method=="GoSafeCon":
+    if method=="GoSafeOpt":
         Reward_data=np.zeros([41,runs])
         Overshoot_summary=np.zeros([2,runs])
         for r in range(runs):
             j=0
-            if contextual:
-                opt=GoSafeContextual_Optimizer()
-            else:
-                opt = GoSafe_Optimizer()
+            opt=GoSafeOpt_Optimizer()
             random.seed(r+2)
             np.random.seed(r+2)
             opt.sys.env.seed(r+2)

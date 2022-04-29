@@ -3,12 +3,12 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
-from safeopt import SafeOptSwarm,Contextual_GoSafe
+from gosafeopt import SafeOptSwarm, GoSafeOptPractical
 import gym
-import Panda_Env #Library defined for the panda environment
+import pandaenv #Library defined for the panda environment
 import mujoco_py
 import scipy
-from osc_controller import inverse_dynamics_control
+from pandaenv.utils import inverse_dynamics_control
 import GPy
 import random
 import time
@@ -24,7 +24,6 @@ class System(object):
 
     def __init__(self,position_bound,velocity_bound,rollout_limit=0,upper_eigenvalue=0):
         self.env = gym.make("PandaEnvPath-v0")
-
         self.Q=np.eye(6)
         self.R=np.eye(3)/100
         self.env.seed(0)
@@ -336,7 +335,6 @@ class Eic(object):
 #opt=SafeOpt_Optimizer()
 method="eic"
 #method="GoSafe"
-contextual=True
 iterations=201
 runs=10
 plot=False

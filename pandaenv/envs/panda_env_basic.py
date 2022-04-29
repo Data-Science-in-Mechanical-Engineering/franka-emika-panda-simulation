@@ -8,6 +8,7 @@ import gym
 from gym import error, spaces
 from gym.utils import seeding
 from gym.envs.robotics import utils
+from os import path
 
 try:
     import mujoco_py
@@ -18,7 +19,7 @@ DEFAULT_SIZE=500
 
 INITIAL_q={'panda_joint1':0,'panda_joint2':0,'panda_joint3':0, 'panda_joint4':0,'panda_joint5':0,
       'panda_joint6':0,'panda_joint7':0,'panda_finger_joint1':0,'panda_finger_joint2':0}
-class PandaEnv(gym.GoalEnv):
+class PandaEnvBasic(gym.GoalEnv):
     """
     n_substeps: : int
         Optional number of MuJoCo steps to run for every call to :meth:`.step`.
@@ -26,8 +27,12 @@ class PandaEnv(gym.GoalEnv):
     """
 
     def __init__(self,n_substeps=1,initial_qpos=INITIAL_q,n_actions=9):
-
-        self.model=mujoco_py.load_model_from_path("assets/Panda_xml/model_torque.xml")
+        
+        model_path = "Panda_xml/model_torque.xml"
+        fullpath = os.path.join(os.path.dirname(__file__), "assets", model_path)
+        if not path.exists(fullpath):
+            raise OSError(f"File {fullpath} does not exist")
+        self.model=mujoco_py.load_model_from_path(fullpath)
         self.sim=mujoco_py.MjSim(self.model,nsubsteps=n_substeps)
         self.viewer=None
         self._viewers={}
@@ -90,7 +95,7 @@ class PandaEnv(gym.GoalEnv):
         # Gimbel lock) or we may not achieve an initial condition (e.g. an object is within the hand).
         # In this case, we just keep randomizing until we eventually achieve a valid initial
         # configuration.
-        super(PandaEnv, self).reset()
+        super(PandaEnvBasic, self).reset()
         did_reset_sim = False
         while not did_reset_sim:
             did_reset_sim = self._reset_sim()

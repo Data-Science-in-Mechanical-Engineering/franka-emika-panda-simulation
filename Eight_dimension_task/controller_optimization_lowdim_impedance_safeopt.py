@@ -1,13 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
-from safeopt import linearly_spaced_combinations
-from safeopt import SafeOptSwarm,SafeOpt
+from gosafeopt import linearly_spaced_combinations
+from gosafeopt import SafeOptSwarm,SafeOpt
 import gym
-import Panda_Env #Library defined for the panda environment
+import pandaenv #Library defined for the panda environment
 import mujoco_py
 import scipy
-from osc_controller import inverse_dynamics_control
+from pandaenv.utils import inverse_dynamics_control
 import GPy
 import random
 import time
@@ -18,7 +18,7 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 class System(object):
 
     def __init__(self,position_bound,velocity_bound,rollout_limit=0,upper_eigenvalue=0):
-        self.env = gym.make("PandaEnv-v0")
+        self.env = gym.make("PandaEnvBasic-v0")
         
         # Define Q,R, A, B, C matrices
         self.Q=np.eye(6)
