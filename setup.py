@@ -26,7 +26,7 @@ setup(name='pandaenv',
       url='https://github.com/Data-Science-in-Mechanical-Engineering/franka-emika-panda-simulation',
       license='MIT',
       install_requires=[
-      'gym',
+      'gym<=0.21.0',
       'mujoco_py'],#And any other dependencies required
       extras_require = extras,
       
